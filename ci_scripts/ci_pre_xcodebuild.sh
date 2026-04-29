@@ -2,13 +2,11 @@
 #
 # Xcode Cloud pre-build hook.
 #
-# Stamps the version into Resources/Info.plist before the build runs:
-#   CFBundleShortVersionString -> <base>-build.<CI_BUILD_NUMBER>   e.g. 1.0.0-build.42
-#   CFBundleVersion            -> <CI_BUILD_NUMBER>
-#
-# <base> is whatever marketing version is already in the plist with any prior
-# "-build.N" suffix stripped, so day-to-day you bump 1.0.0 -> 1.1.0 by editing
-# project.yml / Info.plist and Xcode Cloud appends the build number.
+# Leaves CFBundleShortVersionString (the marketing version, e.g. "1.0.0") alone
+# so it stays App-Store-Connect-compatible (must be exactly three integers).
+# Stamps the build identifier into CFBundleVersion as <YYYYMMDD>.<CI_BUILD_NUMBER>,
+# e.g. 20260429.42. CI_BUILD_NUMBER is the trailing component because Xcode Cloud
+# guarantees it increments monotonically per workflow — required by App Store Connect.
 set -euo pipefail
 
 if [[ -z "${CI_BUILD_NUMBER:-}" ]]; then
@@ -23,13 +21,13 @@ if [[ ! -f "$INFO_PLIST" ]]; then
     exit 1
 fi
 
-CURRENT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST")
-BASE="${CURRENT%%-*}"
-NEW_MARKETING="${BASE}-build.${CI_BUILD_NUMBER}"
+DATESTAMP=$(date -u +%Y%m%d)
+NEW_BUILD="${DATESTAMP}.${CI_BUILD_NUMBER}"
+
+MARKETING=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST")
 
 echo "Patching $INFO_PLIST"
-echo "  CFBundleShortVersionString: $CURRENT -> $NEW_MARKETING"
-echo "  CFBundleVersion:            -> $CI_BUILD_NUMBER"
+echo "  CFBundleShortVersionString: $MARKETING (unchanged)"
+echo "  CFBundleVersion:            -> $NEW_BUILD"
 
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $NEW_MARKETING" "$INFO_PLIST"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $CI_BUILD_NUMBER" "$INFO_PLIST"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW_BUILD" "$INFO_PLIST"

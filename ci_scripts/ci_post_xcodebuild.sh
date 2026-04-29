@@ -39,7 +39,10 @@ if [[ ! -d "$APP_PATH" ]]; then
     exit 1
 fi
 
-VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist")
+APP_INFO_PLIST="$APP_PATH/Contents/Info.plist"
+MARKETING=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_INFO_PLIST")
+BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_INFO_PLIST")
+VERSION="${MARKETING}+${BUILD}"
 TAG="v$VERSION"
 ASSET_NAME="${APP_NAME}-${VERSION}.zip"
 
