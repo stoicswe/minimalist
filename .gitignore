@@ -1,0 +1,23 @@
+# Xcode
+build/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+*.xcuserstate
+*.xcscheme
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Generated icon assets (run `swift make-icon.swift` to regenerate)
+Resources/Assets.xcassets/AppIcon.appiconset/*.png
+
+# macOS
+.DS_Store
+
+# Build artifacts
+*.xcarchive
+*.zip

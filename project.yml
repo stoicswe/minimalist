@@ -1,0 +1,61 @@
+name: Minimalist
+options:
+  bundleIdPrefix: com.stoicswe
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: P22P7U46RW
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.10"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    ENABLE_HARDENED_RUNTIME: YES
+    SWIFT_STRICT_CONCURRENCY: minimal
+    GENERATE_INFOPLIST_FILE: NO
+
+packages:
+  Highlightr:
+    url: https://github.com/raspu/Highlightr
+    from: 2.2.1
+  MarkdownUI:
+    url: https://github.com/gonzalezreal/swift-markdown-ui
+    from: 2.4.0
+
+targets:
+  Minimalist:
+    type: application
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources
+      - path: Resources/Assets.xcassets
+    info:
+      path: Resources/Info.plist
+      properties:
+        CFBundleName: Minimalist
+        CFBundleDisplayName: Minimalist
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "26.0"
+        NSHumanReadableCopyright: ""
+        NSPrincipalClass: NSApplication
+        CFBundleIconName: AppIcon
+    entitlements:
+      path: Resources/Minimalist.entitlements
+      properties:
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stoicswe.minimalist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: Resources/Minimalist.entitlements
+        COMBINE_HIDPI_IMAGES: YES
+    dependencies:
+      - package: Highlightr
+      - package: MarkdownUI
