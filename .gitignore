@@ -1,15 +1,15 @@
 # Xcode
 build/
 DerivedData/
-*.xcworkspace/
+#*.xcworkspace/
 xcuserdata/
 *.xcuserstate
 *.xcscheme
 
 # Swift Package Manager
 .build/
-.swiftpm/
-Package.resolved
+#.swiftpm/
+#Package.resolved
 
 # Generated icon assets (run `swift make-icon.swift` to regenerate)
 Resources/Assets.xcassets/AppIcon.appiconset/*.png
