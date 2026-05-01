@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="asciidoctor.css">
+<style>
+  /* Reset the default white page so our app's pane background shows
+     through. The asciidoctor stylesheet sets a body background on its
+     own — undo that and use system colors that respect light/dark. */
+  html, body {
+    background: transparent !important;
+    color-scheme: light dark;
+  }
+  body {
+    color: -apple-system-label;
+    font: -apple-system-body;
+    margin: 0;
+    padding: 32px 36px;
+    max-width: 820px;
+  }
+  /* Asciidoctor's default content uses Noto Serif at body level — switch
+     the site fonts to the system font stack so it visually matches the
+     rest of the app. */
+  body.article, .literalblock pre, .listingblock pre {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+                 system-ui, sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+    color: -apple-system-label;
+  }
+  /* Code blocks: monospace + a translucent surface that adapts to
+     whichever appearance the page is rendered under. */
+  pre, code, kbd, samp {
+    font-family: "SF Mono", Menlo, Monaco, "Courier New", monospace;
+  }
+  pre.highlight, .literalblock pre, .listingblock pre {
+    background-color: color-mix(in srgb, currentColor 8%, transparent);
+    color: -apple-system-label;
+    border: 0;
+    padding: 12px 14px;
+    border-radius: 6px;
+  }
+  code {
+    background-color: color-mix(in srgb, currentColor 8%, transparent);
+    padding: 2px 5px;
+    border-radius: 4px;
+  }
+  blockquote {
+    border-left: 3px solid color-mix(in srgb, currentColor 30%, transparent);
+    padding-left: 14px;
+    color: color-mix(in srgb, currentColor 70%, transparent);
+  }
+  table {
+    border-collapse: collapse;
+  }
+  th, td {
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    padding: 6px 10px;
+  }
+  /* Suppress the "Last updated" footer asciidoctor adds by default. */
+  #footer { display: none; }
+  /* Admonitions (NOTE / TIP / etc.) — give them a subtle accent strip
+     instead of asciidoctor's default colored gutter that clashes with
+     dark backgrounds. */
+  .admonitionblock > table {
+    border-collapse: separate;
+  }
+  .admonitionblock td.icon {
+    border-right: 0;
+    padding-right: 12px;
+    color: color-mix(in srgb, currentColor 65%, transparent);
+  }
+  .admonitionblock td.content {
+    border-left: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+    padding-left: 14px;
+  }
+</style>
+</head>
+<body>
+<div id="content"></div>
+<script src="asciidoctor.min.js"></script>
+<script>
+  // The native side calls window.minimalistRender(text) once the page
+  // has loaded. We expose the function on `window` so evaluateJavaScript
+  // from Swift can invoke it without us having to wait for / poll a
+  // DOMContentLoaded handler.
+  let processor = null;
+  window.minimalistRender = function(text) {
+    try {
+      if (!processor) processor = Asciidoctor();
+      const html = processor.convert(text || "", {
+        standalone: false,
+        attributes: {
+          // Don't try to fetch external icons — we're offline.
+          'icons': 'font',
+          'source-highlighter': null,
+          'showtitle': true,
+          'sectanchors': true,
+        },
+      });
+      document.getElementById('content').innerHTML = html;
+    } catch (err) {
+      document.getElementById('content').innerHTML =
+        '<pre style="color: #c33;">AsciiDoc render error:\n' +
+        String(err).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) +
+        '</pre>';
+    }
+  };
+</script>
+</body>
+</html>

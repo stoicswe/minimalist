@@ -124,6 +124,8 @@ struct WorkspaceWindow: View {
     private let isPrimary: Bool
     private let appDelegate: MinimalistAppDelegate
 
+    @Environment(\.openWindow) private var openWindow
+
     @AppStorage(PreferenceKeys.accentPresetID)
     private var accentID: String = AccentPresets.defaultID
 
@@ -142,12 +144,33 @@ struct WorkspaceWindow: View {
             // accent through SwiftUI's tint plumbing).
             .tint(AccentPresets.preset(forID: accentID).color)
             .onAppear {
-                // Only the primary window's workspace gets the
-                // session-end commit hook — other windows are transient.
                 if isPrimary {
                     appDelegate.workspace = workspace
+                    SessionRestorer.shared.restoreAdditionalWindowsOnce(using: openWindow)
                 }
             }
+    }
+}
+
+/// One-shot restoration of any additional windows that were open at the
+/// last quit. The primary window restores snapshot index 0 itself; this
+/// reopens slots 1+. We can't drive `openWindow` from the AppDelegate
+/// (it's a SwiftUI environment value), so we trigger from the primary
+/// window's `onAppear` instead.
+@MainActor
+final class SessionRestorer {
+    static let shared = SessionRestorer()
+    private var didRun = false
+
+    func restoreAdditionalWindowsOnce(using openWindow: OpenWindowAction) {
+        guard !didRun else { return }
+        didRun = true
+        let count = SavedWindowsStore.load().count
+        guard count > 1 else { return }
+        // Skip index 0 — that's the primary window's slot.
+        for index in 1..<count {
+            openWindow(id: "main", value: WindowLaunch.restore(index: index))
+        }
     }
 }
 
@@ -183,6 +206,10 @@ final class WorkspaceCoordinator {
     static let shared = WorkspaceCoordinator()
 
     private var registry: [ObjectIdentifier: Workspace] = [:]
+    /// Order of windows by most recent key activation — index 0 is the
+    /// most-recently focused. Used to choose which window's snapshot
+    /// becomes the "primary" slot on next launch.
+    private var orderedWindows: [ObjectIdentifier] = []
     private weak var lastKeyWindow: NSWindow?
     private var observersInstalled = false
 
@@ -195,9 +222,19 @@ final class WorkspaceCoordinator {
         return registry.values.first
     }
 
+    /// All currently-registered workspaces, ordered from most-recently key
+    /// to least. Used by the AppDelegate at quit time to capture every
+    /// window's state.
+    var allWorkspaces: [Workspace] {
+        orderedWindows.compactMap { registry[$0] }
+    }
+
     func bind(workspace: Workspace, to window: NSWindow) {
         installObserversIfNeeded()
-        registry[ObjectIdentifier(window)] = workspace
+        let key = ObjectIdentifier(window)
+        registry[key] = workspace
+        orderedWindows.removeAll { $0 == key }
+        orderedWindows.insert(key, at: 0)
         lastKeyWindow = window
     }
 
@@ -209,8 +246,11 @@ final class WorkspaceCoordinator {
         ) { [weak self] note in
             Task { @MainActor in
                 guard let self, let window = note.object as? NSWindow else { return }
-                if self.registry[ObjectIdentifier(window)] != nil {
+                let key = ObjectIdentifier(window)
+                if self.registry[key] != nil {
                     self.lastKeyWindow = window
+                    self.orderedWindows.removeAll { $0 == key }
+                    self.orderedWindows.insert(key, at: 0)
                 }
             }
         }
@@ -219,7 +259,9 @@ final class WorkspaceCoordinator {
         ) { [weak self] note in
             Task { @MainActor in
                 guard let self, let window = note.object as? NSWindow else { return }
-                self.registry.removeValue(forKey: ObjectIdentifier(window))
+                let key = ObjectIdentifier(window)
+                self.registry.removeValue(forKey: key)
+                self.orderedWindows.removeAll { $0 == key }
             }
         }
     }
@@ -240,7 +282,10 @@ private struct NewItemCommands: View {
         Group {
             Button("New") { WorkspaceCoordinator.shared.current?.newUntitled() }
                 .keyboardShortcut("n", modifiers: .command)
-            Button("New Window") { openWindow(id: "main", value: WindowLaunch.fresh) }
+            // Each invocation gets a fresh UUID so SwiftUI's WindowGroup
+            // can't dedupe back onto an existing fresh window — ⌘⇧N
+            // always produces a brand-new window.
+            Button("New Window") { openWindow(id: "main", value: WindowLaunch.fresh(UUID())) }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
             Divider()
             Button("Open Folder…") { handleOpen(folder: true) }
@@ -250,8 +295,12 @@ private struct NewItemCommands: View {
             Divider()
             Button("Save") { WorkspaceCoordinator.shared.current?.saveActive() }
                 .keyboardShortcut("s", modifiers: .command)
+            Button("Close Window") {
+                NSApp.keyWindow?.performClose(nil)
+            }
+            .keyboardShortcut("w", modifiers: .command)
             Button("Close Tab") { WorkspaceCoordinator.shared.current?.closeActive() }
-                .keyboardShortcut("w", modifiers: .command)
+                .keyboardShortcut("w", modifiers: [.command, .shift])
         }
     }
 

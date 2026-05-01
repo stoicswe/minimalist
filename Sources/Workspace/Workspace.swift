@@ -24,8 +24,15 @@ final class Workspace: ObservableObject {
         switch launch {
         case .primary:
             self.shouldPersist = true
-            restoreLastFolder()
-            restoreOpenFiles()
+            // Prefer the multi-window snapshot list when present — it's
+            // the new authoritative store. Fall back to the legacy
+            // single-key persistence for users coming from older builds.
+            if let snapshot = SavedWindowsStore.snapshot(at: 0) {
+                applySnapshot(snapshot)
+            } else {
+                restoreLastFolder()
+                restoreOpenFiles()
+            }
             restoreRecents()
         case .fresh:
             self.shouldPersist = false
@@ -37,6 +44,11 @@ final class Workspace: ObservableObject {
         case .openFolder(let url):
             self.shouldPersist = false
             DispatchQueue.main.async { [weak self] in self?.loadFolder(url: url) }
+        case .restore(let index):
+            self.shouldPersist = false
+            if let snapshot = SavedWindowsStore.snapshot(at: index) {
+                DispatchQueue.main.async { [weak self] in self?.applySnapshot(snapshot) }
+            }
         }
     }
 
@@ -354,8 +366,12 @@ final class Workspace: ObservableObject {
 
     /// Snapshot a document's current text into the autosave track. Cheap
     /// and best-effort — caller is responsible for debouncing the call.
+    /// Skipped for non-text kinds (PDFs, images, video, binary) — those
+    /// viewers are read-only and have no text to track.
     func recordAutosave(for document: Document) {
-        guard !document.isUntitled, let tracker = revisionTracker else { return }
+        guard document.kind == .text,
+              !document.isUntitled,
+              let tracker = revisionTracker else { return }
         tracker.recordAutosave(file: document.url, content: document.text)
         touchRecent(document.url)
     }
@@ -383,12 +399,80 @@ final class Workspace: ObservableObject {
             .filter { FileManager.default.isReadableFile(atPath: $0.path) }
     }
 
+    // MARK: - Snapshot capture / apply (multi-window persistence)
+
+    /// Capture this workspace's full restorable state. Called for every
+    /// open window at quit time so that all of them come back on next
+    /// launch — not just the primary.
+    func captureSnapshot() -> WindowSnapshot {
+        var bookmark: Data?
+        if let url = bookmarkedFolderURL {
+            bookmark = try? url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+        }
+        let openPaths = openDocuments
+            .filter { !$0.isUntitled && !$0.isPreview }
+            .map { $0.url.path }
+        let activePath: String? = {
+            guard let active = activeDocument, !active.isUntitled, !active.isPreview else {
+                return nil
+            }
+            return active.url.path
+        }()
+        return WindowSnapshot(
+            folderBookmark: bookmark,
+            openFilePaths: openPaths,
+            activeFilePath: activePath
+        )
+    }
+
+    /// Apply a previously captured snapshot — resolve the folder bookmark,
+    /// reopen the listed files, and re-activate the chosen one.
+    private func applySnapshot(_ snapshot: WindowSnapshot) {
+        if let data = snapshot.folderBookmark {
+            var stale = false
+            do {
+                let url = try URL(
+                    resolvingBookmarkData: data,
+                    options: .withSecurityScope,
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &stale
+                )
+                if url.startAccessingSecurityScopedResource() {
+                    bookmarkedFolderURL = url
+                    rootNode = FileNode(url: url, isDirectory: true)
+                    rootNode?.loadChildrenIfNeeded()
+                    revisionTracker = RevisionTracker(workspaceURL: url)
+                }
+            } catch {
+                // Bookmark unreadable — proceed without a folder.
+            }
+        }
+
+        for path in snapshot.openFilePaths {
+            let url = URL(fileURLWithPath: path)
+            guard FileManager.default.isReadableFile(atPath: url.path) else { continue }
+            guard let doc = Document(url: url) else { continue }
+            doc.isPreview = false
+            openDocuments.append(doc)
+        }
+        if let activePath = snapshot.activeFilePath,
+           let match = openDocuments.first(where: { $0.url.path == activePath }) {
+            activeDocumentID = match.id
+        } else {
+            activeDocumentID = openDocuments.first?.id
+        }
+    }
+
     /// Make a single "session end" commit covering every dirty / recently-
     /// edited document. Called on app quit.
     func recordSessionEnd() {
         guard let tracker = revisionTracker else { return }
         let entries = openDocuments
-            .filter { !$0.isUntitled }
+            .filter { !$0.isUntitled && $0.kind == .text }
             .map { (url: $0.url, content: $0.text) }
         tracker.commitSessionEnd(files: entries)
     }

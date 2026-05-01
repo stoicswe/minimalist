@@ -3,17 +3,35 @@ import SwiftUI
 import ObjectiveC.runtime
 
 /// Hooks into the AppKit lifecycle so we can record a `.minimal` session
-/// commit on app quit. SwiftUI's `WindowGroup` doesn't expose
+/// commit on app quit and snapshot every open window's state for
+/// restoration on next launch. SwiftUI's `WindowGroup` doesn't expose
 /// `applicationWillTerminate`, so we bridge through this minimal delegate.
 final class MinimalistAppDelegate: NSObject, NSApplicationDelegate {
     /// Set by `MinimalistApp.onAppear` so we can reach the active workspace
-    /// without rebuilding it here.
+    /// without rebuilding it here. Used as a fallback for the session-end
+    /// commit when no workspaces are registered with the coordinator.
     weak var workspace: Workspace?
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Best-effort. If anything goes wrong recording the session, we
-        // shouldn't block app shutdown.
-        workspace?.recordSessionEnd()
+        // Snapshot every open window so they all come back on relaunch —
+        // not just the primary. Order is most-recently-key first so the
+        // window the user last interacted with becomes the new primary.
+        // applicationWillTerminate is delivered on the main thread, so we
+        // can synchronously hop into the coordinator's MainActor isolation.
+        MainActor.assumeIsolated {
+            let workspaces = WorkspaceCoordinator.shared.allWorkspaces
+            let snapshots = workspaces.map { $0.captureSnapshot() }
+            SavedWindowsStore.save(snapshots)
+
+            // Best-effort session-end commit on each workspace's git
+            // mirror. Failures here shouldn't block shutdown.
+            for ws in workspaces {
+                ws.recordSessionEnd()
+            }
+            if workspaces.isEmpty {
+                workspace?.recordSessionEnd()
+            }
+        }
     }
 }
 

@@ -299,6 +299,10 @@ private struct EditorContainer: View {
                 }
             }
 
+            // StatusPill dispatches by document kind internally — the
+            // text editor sees language / indent / EOL, every other
+            // kind sees its own metadata readout (dimensions, codec,
+            // duration, magic bytes, etc.).
             if workspace.activeDocument != nil {
                 StatusPill()
                     .padding(14)
@@ -346,7 +350,7 @@ private struct EditorContainer: View {
             ZStack(alignment: .topTrailing) {
                 HStack(spacing: 0) {
                     primaryContent(for: doc)
-                    if showMinimap {
+                    if showMinimap && doc.kind == .text {
                         Divider()
                         MinimapView(document: doc, bridge: minimapBridge)
                             .frame(width: 96)
@@ -354,15 +358,21 @@ private struct EditorContainer: View {
                     }
                     // External scrollbar pinned at the far-right edge so it
                     // sits past the minimap (when shown) instead of getting
-                    // sandwiched between the editor and minimap.
-                    EditorScrollbar(bridge: minimapBridge)
-                        .frame(width: 11)
+                    // sandwiched between the editor and minimap. Specialized
+                    // viewers manage their own scrolling, so we drop it
+                    // entirely for non-text kinds.
+                    if doc.kind == .text {
+                        EditorScrollbar(bridge: minimapBridge)
+                            .frame(width: 11)
+                    }
                 }
                 HStack(spacing: 8) {
-                    if isMarkdown(doc.url) {
+                    if DocumentKindDetector.supportsReaderView(doc.url) && doc.kind == .text {
                         readerToggle(for: doc)
                     }
-                    minimapToggle
+                    if doc.kind == .text {
+                        minimapToggle
+                    }
                 }
                 // In glass mode the tab bar floats over the editor at
                 // y=0..36 — push the corner buttons below it so they're
@@ -378,8 +388,36 @@ private struct EditorContainer: View {
 
     @ViewBuilder
     private func primaryContent(for doc: Document) -> some View {
-        if isMarkdown(doc.url) && (readerEnabled[doc.id] ?? false) {
-            MarkdownReaderView(text: doc.text)
+        switch doc.kind {
+        case .pdf:
+            PDFViewerView(url: doc.url)
+                .id("pdf-\(doc.id)")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, windowGlass ? tabBarHeight : 0)
+        case .image:
+            ImageViewerView(url: doc.url)
+                .id("image-\(doc.id)")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, windowGlass ? tabBarHeight : 0)
+        case .video:
+            VideoPlayerView(url: doc.url)
+                .id("video-\(doc.id)")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, windowGlass ? tabBarHeight : 0)
+        case .binary:
+            HexViewerView(url: doc.url)
+                .id("hex-\(doc.id)")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, windowGlass ? tabBarHeight : 0)
+        case .text:
+            textPrimaryContent(for: doc)
+        }
+    }
+
+    @ViewBuilder
+    private func textPrimaryContent(for doc: Document) -> some View {
+        if DocumentKindDetector.supportsReaderView(doc.url) && (readerEnabled[doc.id] ?? false) {
+            readerView(for: doc)
                 .id("reader-\(doc.id)")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // Reader doesn't have a scroll content inset, so simply
@@ -403,6 +441,15 @@ private struct EditorContainer: View {
             // contentInset boundary. In glass mode the tab bar already
             // provides the visual divider, so suppress it.
             .scrollEdgeEffectStyle(windowGlass ? .soft : nil, for: .top)
+        }
+    }
+
+    @ViewBuilder
+    private func readerView(for doc: Document) -> some View {
+        if DocumentKindDetector.isAsciiDoc(doc.url) {
+            AsciiDocReaderView(text: doc.text, sourceURL: doc.url)
+        } else {
+            MarkdownReaderView(text: doc.text, sourceURL: doc.url)
         }
     }
 
@@ -439,9 +486,6 @@ private struct EditorContainer: View {
         .help(help)
     }
 
-    private func isMarkdown(_ url: URL) -> Bool {
-        ["md", "markdown", "mdx"].contains(url.pathExtension.lowercased())
-    }
 }
 
 /// NSItemProvider hands fileURL items back as Data, NSURL, or URL

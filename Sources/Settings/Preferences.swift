@@ -10,6 +10,11 @@ enum PreferenceKeys {
     static let lastFolderBookmark = "lastFolderBookmark"
     static let openFilePaths = "openFilePaths"
     static let activeFilePath = "activeFilePath"
+    /// Multi-window persistence: an ordered list of `WindowSnapshot` (one
+    /// per open window at quit time). Encoded as JSON Data. The primary
+    /// window restores from index 0; additional windows are reopened by
+    /// the AppDelegate at launch.
+    static let savedWindows = "savedWindows"
 
     // Appearance
     static let colorScheme = "pref.colorScheme"          // "system" | "light" | "dark"

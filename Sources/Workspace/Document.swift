@@ -18,6 +18,11 @@ final class Document: Identifiable, ObservableObject {
     @Published var indentation: Indentation
     @Published var language: String
     @Published var isDirty: Bool = false
+    /// What kind of file this is. Drives which viewer renders in the
+    /// editor pane. For non-text kinds, `text` and friends are unused
+    /// placeholders — the underlying file isn't loaded into memory until
+    /// the viewer asks for it.
+    let kind: DocumentKind
     /// Set by callers (e.g. the Zen-mode search palette) to request that
     /// the editor scroll to a 1-based line number on its next update.
     /// `EditorView.updateNSView` consumes and clears the value.
@@ -25,21 +30,68 @@ final class Document: Identifiable, ObservableObject {
 
     private var savedText: String
 
-    /// Open an existing file from disk.
+    /// Open an existing file from disk. Detects the file's kind by
+    /// extension first; for unknown extensions, attempts a UTF-8 text
+    /// load and falls back to the binary (hex) viewer if the bytes don't
+    /// decode as text.
     init?(url: URL) {
+        guard FileManager.default.isReadableFile(atPath: url.path) else { return nil }
+        let ext = url.pathExtension.lowercased()
+
+        if let media = DocumentKindDetector.mediaKind(forExtension: ext) {
+            self.kind = media
+            self.url = url
+            self.displayName = url.lastPathComponent
+            self.isUntitled = false
+            self.text = ""
+            self.savedText = ""
+            self.lineEnding = .lf
+            self.indentation = Indentation.defaultsFromUserPrefs()
+            self.language = "plaintext"
+            return
+        }
+
+        if let raw = Self.loadAsText(url: url) {
+            self.kind = .text
+            self.url = url
+            self.displayName = url.lastPathComponent
+            self.isUntitled = false
+            self.text = raw
+            self.savedText = raw
+            self.lineEnding = LineEnding.detect(in: raw)
+            self.indentation = Indentation.detect(in: raw) ?? Indentation.defaultsFromUserPrefs()
+            self.language = LanguageDetector.language(for: url)
+        } else {
+            self.kind = .binary
+            self.url = url
+            self.displayName = url.lastPathComponent
+            self.isUntitled = false
+            self.text = ""
+            self.savedText = ""
+            self.lineEnding = .lf
+            self.indentation = Indentation.defaultsFromUserPrefs()
+            self.language = "plaintext"
+        }
+    }
+
+    /// Try to load `url` as a UTF-8 text file. Rejects files larger than
+    /// the text-load ceiling and files whose decoded contents contain a
+    /// NUL byte (a strong signal of binary content even when the rest
+    /// decodes cleanly).
+    private static func loadAsText(url: URL) -> String? {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        if let size = (attrs?[.size] as? NSNumber)?.int64Value,
+           size > DocumentKindDetector.textLoadCeiling {
+            return nil
+        }
         guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-        self.url = url
-        self.displayName = url.lastPathComponent
-        self.isUntitled = false
-        self.text = raw
-        self.savedText = raw
-        self.lineEnding = LineEnding.detect(in: raw)
-        self.indentation = Indentation.detect(in: raw) ?? Indentation.defaultsFromUserPrefs()
-        self.language = LanguageDetector.language(for: url)
+        if raw.contains("\u{0}") { return nil }
+        return raw
     }
 
     /// Create a new untitled document backed by a temp file.
     init(untitledAt tempURL: URL, displayName: String) {
+        self.kind = .text
         self.url = tempURL
         self.displayName = displayName
         self.isUntitled = true
@@ -53,7 +105,9 @@ final class Document: Identifiable, ObservableObject {
     }
 
     /// Persist current text to the document's current URL (temp or real).
+    /// No-op for non-text kinds — the binary / media viewers are read-only.
     func save() throws {
+        guard kind == .text else { return }
         let normalized = lineEnding.normalize(text)
         try normalized.write(to: url, atomically: true, encoding: .utf8)
         savedText = text
@@ -63,6 +117,7 @@ final class Document: Identifiable, ObservableObject {
     /// Write current text to backing temp file without changing dirty state.
     /// Used to keep the temp file in sync as a crash-recovery snapshot.
     func writeDraftSnapshot() {
+        guard kind == .text else { return }
         let normalized = lineEnding.normalize(text)
         try? normalized.write(to: url, atomically: true, encoding: .utf8)
     }
