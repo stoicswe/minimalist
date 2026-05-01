@@ -404,6 +404,11 @@ private struct EditorContainer: View {
                 .id("video-\(doc.id)")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.top, windowGlass ? tabBarHeight : 0)
+        case .audio:
+            AudioPlayerView(url: doc.url)
+                .id("audio-\(doc.id)")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, windowGlass ? tabBarHeight : 0)
         case .binary:
             HexViewerView(url: doc.url)
                 .id("hex-\(doc.id)")

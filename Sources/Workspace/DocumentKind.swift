@@ -9,6 +9,7 @@ enum DocumentKind: String, Codable {
     case pdf
     case image
     case video
+    case audio
     case binary
 }
 
@@ -27,6 +28,10 @@ enum DocumentKindDetector {
     private static let videoExtensions: Set<String> = [
         "mp4", "mov", "m4v", "avi", "mkv", "webm",
     ]
+    private static let audioExtensions: Set<String> = [
+        "mp3", "m4a", "aac", "wav", "aif", "aiff",
+        "flac", "ogg", "oga", "opus", "wma", "caf", "mka",
+    ]
 
     /// Returns the kind purely from extension. `nil` means "could be text
     /// or could be binary — caller needs to look at the bytes".
@@ -35,6 +40,7 @@ enum DocumentKindDetector {
         if pdfExtensions.contains(lower)   { return .pdf }
         if imageExtensions.contains(lower) { return .image }
         if videoExtensions.contains(lower) { return .video }
+        if audioExtensions.contains(lower) { return .audio }
         return nil
     }
 

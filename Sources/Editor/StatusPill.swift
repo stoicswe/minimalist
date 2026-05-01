@@ -14,6 +14,7 @@ struct StatusPill: View {
             case .text:   TextStatusPill(document: doc)
             case .image:  ImageMetadataPill(url: doc.url)
             case .video:  VideoMetadataPill(url: doc.url)
+            case .audio:  AudioMetadataPill(url: doc.url)
             case .pdf:    PDFMetadataPill(url: doc.url)
             case .binary: BinaryMetadataPill(url: doc.url)
             }
@@ -124,6 +125,61 @@ private struct VideoMetadataPill: View {
                 ? String(format: "%.0f", fps)
                 : String(format: "%.2f", fps)
             parts.append("\(rounded) fps")
+        }
+        if let dur = meta.durationSeconds {
+            parts.append(MediaMetadataLoader.formatDuration(dur))
+        }
+        if let bytes = meta.fileSize {
+            parts.append(MediaMetadataLoader.formatBytes(bytes))
+        }
+        return interleave(parts)
+    }
+}
+
+private struct AudioMetadataPill: View {
+    let url: URL
+    @AppStorage(PreferenceKeys.windowGlass) private var windowGlass: Bool = false
+    @State private var meta: AudioMetadata?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { item in
+                if item.element == pillDividerToken {
+                    pillDivider
+                } else {
+                    Text(item.element)
+                }
+            }
+        }
+        .modifier(PillTextStyle())
+        .modifier(StatusPillSurface(useGlass: windowGlass))
+        .task(id: url) { meta = await MediaMetadataLoader.audio(at: url) }
+    }
+
+    private var segments: [String] {
+        guard let meta else { return ["Loading…"] }
+        var parts: [String] = []
+        if let codec = meta.codec { parts.append(codec) }
+        if let channels = meta.channelCount {
+            switch channels {
+            case 1:  parts.append("Mono")
+            case 2:  parts.append("Stereo")
+            default: parts.append("\(channels)ch")
+            }
+        }
+        if let rate = meta.sampleRate, rate > 0 {
+            // 44100 → "44.1 kHz", 48000 → "48 kHz", 96000 → "96 kHz".
+            let kHz = rate / 1000.0
+            let label: String
+            if kHz.rounded() == kHz {
+                label = String(format: "%.0f kHz", kHz)
+            } else {
+                label = String(format: "%.1f kHz", kHz)
+            }
+            parts.append(label)
+        }
+        if let kbps = meta.bitRateKbps, kbps > 0 {
+            parts.append("\(kbps) kbps")
         }
         if let dur = meta.durationSeconds {
             parts.append(MediaMetadataLoader.formatDuration(dur))

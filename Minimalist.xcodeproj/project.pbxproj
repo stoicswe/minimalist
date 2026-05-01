@@ -34,6 +34,7 @@
 		5A91F9162479362AA60C859A /* FileOperations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BA3928338612C564B6D47C0 /* FileOperations.swift */; };
 		639141361E3E6854EE9E64E4 /* PaneBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43830FF8D4CBFF9E2C2D43DF /* PaneBackground.swift */; };
 		64760847C13607BAA7284E83 /* LineNumberRulerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C121F926D26B45CA14A399B /* LineNumberRulerView.swift */; };
+		68D70221C86FF150528DFA45 /* AudioPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E37370CC6867061BFE04BE18 /* AudioPlayerView.swift */; };
 		6D02C7CC5EA6F5508EA654A6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 63A5D25F74FEF60F22EDD491 /* Assets.xcassets */; };
 		6E552BF18856E79782AB7A9C /* ImageViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50297DFB5281EE93EF8E58D2 /* ImageViewerView.swift */; };
 		7201440143F5BD730A566B19 /* PDFViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1284D81F2E17831D3327F9D4 /* PDFViewerView.swift */; };
@@ -119,6 +120,7 @@
 		DC02C2ED2F847CA5A7836E6E /* RevisionHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevisionHistoryView.swift; sourceTree = "<group>"; };
 		DCC648C365A080CA1D788B72 /* EditorBackgroundOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorBackgroundOption.swift; sourceTree = "<group>"; };
 		E2FA5C2A0647FE096BD04B10 /* WindowSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSnapshot.swift; sourceTree = "<group>"; };
+		E37370CC6867061BFE04BE18 /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
 		E6FEE8F5CD3B7E4E3B9ED3C2 /* DocumentKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentKind.swift; sourceTree = "<group>"; };
 		EB3CD14026BE84BF3ED4BB1C /* ZenModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZenModeView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -243,6 +245,7 @@
 			isa = PBXGroup;
 			children = (
 				09EDCA8B3BFAE2B08E90ED31 /* AsciiDocReaderView.swift */,
+				E37370CC6867061BFE04BE18 /* AudioPlayerView.swift */,
 				4060A6941892C0B8393E0C38 /* CodeTextView.swift */,
 				649A8428996276430E62E400 /* CommitHistoryView.swift */,
 				7FA9F6EFE6E173ADD098DB4A /* CompletionEngine.swift */,
@@ -366,6 +369,7 @@
 			files = (
 				15BEEBDC3CA1118DDB05DB86 /* AccentTheme.swift in Sources */,
 				249140465089F6A0424626E3 /* AsciiDocReaderView.swift in Sources */,
+				68D70221C86FF150528DFA45 /* AudioPlayerView.swift in Sources */,
 				18E7C8259892C3F7E24FB477 /* BranchPopover.swift in Sources */,
 				A815883F84D5FAC27DE842C1 /* CodeTextView.swift in Sources */,
 				297FC53A6AE4178A765C9B67 /* CommitHistoryView.swift in Sources */,

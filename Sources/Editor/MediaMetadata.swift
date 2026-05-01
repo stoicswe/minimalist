@@ -27,6 +27,17 @@ struct VideoMetadata: Equatable {
     var fileSize: Int64?
 }
 
+struct AudioMetadata: Equatable {
+    var durationSeconds: Double?
+    var sampleRate: Double?
+    var channelCount: Int?
+    var codec: String?
+    var bitRateKbps: Int?
+    var fileSize: Int64?
+    var title: String?
+    var artist: String?
+}
+
 struct BinaryMetadata: Equatable {
     var fileSize: Int64
     var typeDescription: String?
@@ -91,6 +102,50 @@ enum MediaMetadataLoader {
                 if let first = formats.first {
                     let fourCC = CMFormatDescriptionGetMediaSubType(first)
                     meta.codec = fourCharString(fourCC)
+                }
+            }
+        }
+        return meta
+    }
+
+    static func audio(at url: URL) async -> AudioMetadata {
+        var meta = AudioMetadata()
+        meta.fileSize = fileSize(at: url)
+
+        let asset = AVURLAsset(url: url)
+        if let duration = try? await asset.load(.duration) {
+            let seconds = CMTimeGetSeconds(duration)
+            if seconds.isFinite, seconds > 0 { meta.durationSeconds = seconds }
+        }
+        if let track = try? await asset.loadTracks(withMediaType: .audio).first {
+            if let formats = try? await track.load(.formatDescriptions),
+               let first = formats.first {
+                let basic = CMAudioFormatDescriptionGetStreamBasicDescription(first)?.pointee
+                if let basic {
+                    if basic.mSampleRate > 0 { meta.sampleRate = basic.mSampleRate }
+                    if basic.mChannelsPerFrame > 0 {
+                        meta.channelCount = Int(basic.mChannelsPerFrame)
+                    }
+                }
+                let fourCC = CMFormatDescriptionGetMediaSubType(first)
+                meta.codec = audioCodecLabel(fourCC)
+            }
+            if let bitsPerSecond = try? await track.load(.estimatedDataRate),
+               bitsPerSecond > 0 {
+                meta.bitRateKbps = Int((Double(bitsPerSecond) / 1000.0).rounded())
+            }
+        }
+
+        // Best-effort common metadata pull — title / artist for the
+        // pill. ID3v2, iTunes-style atoms, and Vorbis comments all map
+        // through `commonMetadata`.
+        if let items = try? await asset.load(.commonMetadata) {
+            for item in items {
+                guard let key = item.commonKey else { continue }
+                if key == .commonKeyTitle, meta.title == nil {
+                    meta.title = try? await item.load(.stringValue)
+                } else if key == .commonKeyArtist, meta.artist == nil {
+                    meta.artist = try? await item.load(.stringValue)
                 }
             }
         }
@@ -163,6 +218,26 @@ enum MediaMetadataLoader {
             return String(format: "%d:%02d:%02d", h, m, s)
         }
         return String(format: "%d:%02d", m, s)
+    }
+
+    /// Map a CoreAudio `FourCharCode` to a friendly label — most
+    /// formats use printable four-letter codes, but the integer-PCM
+    /// variants come through as opaque numeric IDs that need a manual
+    /// lookup.
+    private static func audioCodecLabel(_ code: FourCharCode) -> String {
+        switch code {
+        case kAudioFormatLinearPCM:    return "PCM"
+        case kAudioFormatMPEG4AAC:     return "AAC"
+        case kAudioFormatMPEGLayer3:   return "MP3"
+        case kAudioFormatAppleLossless: return "ALAC"
+        case kAudioFormatFLAC:         return "FLAC"
+        case kAudioFormatOpus:         return "Opus"
+        case kAudioFormatAC3:          return "AC-3"
+        case kAudioFormatMPEGD_USAC:   return "xHE-AAC"
+        default:
+            let label = fourCharString(code)
+            return label.uppercased()
+        }
     }
 
     /// Decode a `FourCharCode` into the four-letter codec mnemonic
