@@ -10,7 +10,64 @@ final class MinimalistAppDelegate: NSObject, NSApplicationDelegate {
     /// Set by `MinimalistApp.onAppear` so we can reach the active workspace
     /// without rebuilding it here. Used as a fallback for the session-end
     /// commit when no workspaces are registered with the coordinator.
-    weak var workspace: Workspace?
+    weak var workspace: Workspace? {
+        didSet { drainPendingOpenURLs() }
+    }
+
+    /// URLs delivered by `application(_:open:)` before any workspace had
+    /// registered yet — typically when launching from Finder via "Open
+    /// With Minimalist". Drained as soon as a workspace is available.
+    private var pendingOpenURLs: [URL] = []
+
+    /// Receives file URLs from Finder ("Open With…", drag-onto-icon,
+    /// double-click after registering CFBundleDocumentTypes). Routes them
+    /// into the active workspace's tabs, queueing if no window is up yet.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        if WorkspaceCoordinator.shared.current != nil || workspace != nil {
+            openInActiveWorkspace(urls)
+        } else {
+            pendingOpenURLs.append(contentsOf: urls)
+            // Belt-and-suspenders: SwiftUI's primary window registers via
+            // WindowWorkspaceBinder shortly after launch. If that ever
+            // fails, retry a few times before giving up.
+            scheduleDrainRetry(retriesRemaining: 20)
+        }
+    }
+
+    private func scheduleDrainRetry(retriesRemaining: Int) {
+        guard retriesRemaining > 0, !pendingOpenURLs.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            guard let self else { return }
+            if WorkspaceCoordinator.shared.current != nil || self.workspace != nil {
+                self.drainPendingOpenURLs()
+            } else {
+                self.scheduleDrainRetry(retriesRemaining: retriesRemaining - 1)
+            }
+        }
+    }
+
+    private func drainPendingOpenURLs() {
+        guard !pendingOpenURLs.isEmpty else { return }
+        let urls = pendingOpenURLs
+        pendingOpenURLs.removeAll()
+        openInActiveWorkspace(urls)
+    }
+
+    private func openInActiveWorkspace(_ urls: [URL]) {
+        MainActor.assumeIsolated {
+            guard let workspace = WorkspaceCoordinator.shared.current ?? self.workspace else { return }
+            for url in urls {
+                let isFolder = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+                if isFolder {
+                    workspace.adoptFolder(at: url)
+                } else {
+                    workspace.open(url: url)
+                }
+            }
+            // Bring the window forward in case Finder didn't already do it.
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
 
     func applicationWillTerminate(_ notification: Notification) {
         // Snapshot every open window so they all come back on relaunch —

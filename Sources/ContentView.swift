@@ -158,42 +158,55 @@ struct ContentView: View {
                 .opacity(paneTransparency == 0 ? 1 : 0)
                 .ignoresSafeArea()
 
-            HSplitView {
-                // Sidebar column: pane background as a ZStack sibling so it
-                // fully extends to the window's top edge under
-                // .ignoresSafeArea (a `.background(...)` modifier here
-                // doesn't always extend).
-                ZStack(alignment: .topLeading) {
-                    PaneBackground(
-                        baseColor: Color(nsColor: .windowBackgroundColor),
-                        transparency: paneTransparency
-                    )
-                    sidebarAccentWash
-                    VStack(spacing: 0) {
-                        Color.clear.frame(height: titleBarReservedHeight)
-                        TopBar()
-                        FileTreeView()
+            // Brand-new windows with neither a folder nor any open docs
+            // hide the sidebar entirely so the empty-state hint stands
+            // alone. Once anything is opened, the sidebar comes back.
+            if workspace.rootNode == nil && workspace.openDocuments.isEmpty {
+                editorPane
+            } else {
+                HSplitView {
+                    // Sidebar column: pane background as a ZStack sibling so it
+                    // fully extends to the window's top edge under
+                    // .ignoresSafeArea (a `.background(...)` modifier here
+                    // doesn't always extend).
+                    ZStack(alignment: .topLeading) {
+                        PaneBackground(
+                            baseColor: Color(nsColor: .windowBackgroundColor),
+                            transparency: paneTransparency
+                        )
+                        sidebarAccentWash
+                        VStack(spacing: 0) {
+                            Color.clear.frame(height: titleBarReservedHeight)
+                            TopBar()
+                            FileTreeView()
+                        }
                     }
-                }
-                .frame(minWidth: 180, idealWidth: 240)
-                .ignoresSafeArea(.container, edges: .top)
+                    .frame(minWidth: 180, idealWidth: 240)
+                    .ignoresSafeArea(.container, edges: .top)
 
-                // Editor column: tabs sit at the very top of the window,
-                // no strip above them.
-                ZStack(alignment: .topLeading) {
-                    PaneBackground(
-                        baseColor: editorPaneBaseColor,
-                        transparency: editorPaneTransparency
-                    )
-                    editorBackgroundPatternOverlay
-                    EditorContainer()
+                    editorPane
                 }
-                .environment(\.editorSurfaceIsDark, editorSurfaceIsDark)
-                .frame(minWidth: 400)
-                .layoutPriority(1)
-                .ignoresSafeArea(.container, edges: .top)
             }
         }
+    }
+
+    /// Editor column: tabs sit at the very top of the window, no strip
+    /// above them. Used both inside the HSplitView and as the sole pane
+    /// when the window has no folder + no open documents.
+    @ViewBuilder
+    private var editorPane: some View {
+        ZStack(alignment: .topLeading) {
+            PaneBackground(
+                baseColor: editorPaneBaseColor,
+                transparency: editorPaneTransparency
+            )
+            editorBackgroundPatternOverlay
+            EditorContainer()
+        }
+        .environment(\.editorSurfaceIsDark, editorSurfaceIsDark)
+        .frame(minWidth: 400)
+        .layoutPriority(1)
+        .ignoresSafeArea(.container, edges: .top)
     }
 }
 
@@ -514,16 +527,26 @@ private struct WatermarkBackground: View {
 }
 
 private struct EmptyState: View {
-    @EnvironmentObject var workspace: Workspace
-
     var body: some View {
         VStack(spacing: 18) {
             Text("Minimalist")
                 .font(.system(size: 36, weight: .light, design: .serif))
                 .foregroundStyle(.secondary)
-            Button("Open Folder") { workspace.openFolder() }
+            VStack(spacing: 6) {
+                shortcutRow(label: "Open File", keys: "⌘O")
+                shortcutRow(label: "Open Folder", keys: "⌘⇧O")
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func shortcutRow(label: String, keys: String) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+            Text(keys).monospaced()
+        }
     }
 }
 

@@ -46,6 +46,24 @@ struct FileTreeView: View {
                         handleRootDrop(providers: providers, into: root.url)
                     }
                 }
+            } else if !openFileURLs.isEmpty {
+                // No project folder, but the user has opened one or more
+                // loose files (potentially from different folders). Show
+                // them as a flat list so they're navigable from the
+                // sidebar instead of being reachable only via tabs.
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 1) {
+                        ForEach(openFileURLs, id: \.self) { url in
+                            OpenFileRow(
+                                url: url,
+                                historyContext: $historyContext,
+                                rightClickedURL: $rightClickedURL
+                            )
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+                .scrollContentBackground(.hidden)
             } else {
                 EmptySidebar()
             }
@@ -62,6 +80,14 @@ struct FileTreeView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)) { _ in
             rightClickedURL = nil
         }
+    }
+
+    /// On-disk URLs of the documents currently open in this window.
+    /// Used to populate the loose-file list when there's no project
+    /// folder open. Untitled (in-memory) docs aren't reachable from
+    /// the filesystem, so they're excluded.
+    private var openFileURLs: [URL] {
+        workspace.openDocuments.compactMap { $0.isUntitled ? nil : $0.url }
     }
 
     @ViewBuilder
@@ -300,6 +326,75 @@ private struct DirectoryRow: View {
     private var rowBackground: some View {
         if dropHighlight {
             Color.accentColor.opacity(0.18)
+        } else if hovering {
+            Color.primary.opacity(0.05)
+        } else {
+            Color.clear
+        }
+    }
+}
+
+/// Sidebar row for a loose open file when no project folder is open. Lives
+/// outside the `FileNode` tree because these files come from arbitrary
+/// places on disk; we only have URLs to work with. Click activates the
+/// document's tab; right-click reuses the standard `FileContextMenu`.
+private struct OpenFileRow: View {
+    @EnvironmentObject var workspace: Workspace
+    let url: URL
+    @Binding var historyContext: HistoryContext?
+    @Binding var rightClickedURL: URL?
+    @AppStorage(PreferenceKeys.accentPresetID)
+    private var rightClickAccentID: String = AccentPresets.defaultID
+
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Spacer().frame(width: 10)
+            FileIcon(isDirectory: false, isOpen: false, url: url)
+                .frame(width: 16, height: 16)
+            Text(url.lastPathComponent)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 8)
+        .padding(.vertical, 3)
+        // Tooltip shows the full path so duplicate filenames from
+        // different folders are still distinguishable.
+        .help(url.path)
+        .background(rowBackground)
+        .background(RightClickReporter { rightClickedURL = url })
+        .overlay(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(AccentPresets.preset(forID: rightClickAccentID).color, lineWidth: 1.5)
+                .opacity(rightClickedURL == url ? 1 : 0)
+                .allowsHitTesting(false)
+        )
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        // The file is already open as a tab — both gestures just
+        // activate it. `open(url:)` and `openPreview(url:)` both
+        // short-circuit to "activate existing" when the doc is present.
+        .onTapGesture(count: 2) { workspace.open(url: url) }
+        .onTapGesture(count: 1) { workspace.openPreview(url: url) }
+        .contextMenu {
+            FileContextMenu(
+                target: .file(url),
+                workspace: workspace,
+                historyContext: $historyContext
+            )
+        }
+        .onDrag { NSItemProvider(object: url as NSURL) }
+    }
+
+    @ViewBuilder
+    private var rowBackground: some View {
+        let isActive = workspace.activeDocument?.url == url
+        if isActive {
+            Color.primary.opacity(0.08)
         } else if hovering {
             Color.primary.opacity(0.05)
         } else {

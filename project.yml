@@ -49,6 +49,118 @@ targets:
         NSHumanReadableCopyright: ""
         NSPrincipalClass: NSApplication
         CFBundleIconName: AppIcon
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Source Code
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.source-code
+              - public.script
+              - public.shell-script
+              - public.json
+              - public.xml
+              - public.yaml
+          - CFBundleTypeName: Plain Text
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.plain-text
+              - public.text
+              - net.daringfireball.markdown
+          - CFBundleTypeName: Source Code File
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            CFBundleTypeExtensions:
+              - swift
+              - js
+              - mjs
+              - cjs
+              - jsx
+              - ts
+              - tsx
+              - py
+              - pyi
+              - rb
+              - rake
+              - rs
+              - go
+              - c
+              - h
+              - cc
+              - cpp
+              - cxx
+              - hpp
+              - hh
+              - m
+              - mm
+              - java
+              - kt
+              - kts
+              - scala
+              - sbt
+              - sh
+              - bash
+              - zsh
+              - ps1
+              - lua
+              - php
+              - html
+              - htm
+              - xml
+              - svg
+              - plist
+              - css
+              - scss
+              - sass
+              - less
+              - json
+              - yaml
+              - yml
+              - toml
+              - ini
+              - conf
+              - md
+              - markdown
+              - mdx
+              - sql
+              - r
+              - dart
+              - ex
+              - exs
+              - erl
+              - hs
+              - clj
+              - cljs
+              - vim
+              - tex
+              - diff
+              - patch
+              - graphql
+              - gql
+              - proto
+              - adoc
+              - asciidoc
+              - asc
+          - CFBundleTypeName: PDF
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.adobe.pdf
+          - CFBundleTypeName: Image
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.image
+          - CFBundleTypeName: Movie
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.movie
+          - CFBundleTypeName: Audio
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.audio
     entitlements:
       path: Resources/Minimalist.entitlements
       properties:
