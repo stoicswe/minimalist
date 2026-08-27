@@ -155,7 +155,6 @@ struct EditorView: NSViewRepresentable {
         private var prefsObserver: NSObjectProtocol?
         private var appearanceObserver: NSObjectProtocol?
         private weak var minimapBridge: MinimapBridge?
-        private var scrollObserver: NSObjectProtocol?
 
         // Inline ghost-text completion. `pendingCompletion` describes a
         // run of ghost characters currently sitting in the text storage;
@@ -197,7 +196,8 @@ struct EditorView: NSViewRepresentable {
         deinit {
             if let prefsObserver { NotificationCenter.default.removeObserver(prefsObserver) }
             if let appearanceObserver { NotificationCenter.default.removeObserver(appearanceObserver) }
-            if let scrollObserver { NotificationCenter.default.removeObserver(scrollObserver) }
+            NotificationCenter.default.removeObserver(
+                self, name: NSView.boundsDidChangeNotification, object: nil)
         }
 
         // MARK: - Minimap bridge
@@ -227,18 +227,26 @@ struct EditorView: NSViewRepresentable {
             }
 
             // Listen to scroll changes so we can publish them to the bridge.
+            // Selector-based registration — the block-based observer API
+            // takes a @Sendable closure, which can't capture this
+            // non-Sendable coordinator.
             scrollView.contentView.postsBoundsChangedNotifications = true
-            scrollObserver = NotificationCenter.default.addObserver(
-                forName: NSView.boundsDidChangeNotification,
-                object: scrollView.contentView,
-                queue: .main
-            ) { [weak self] _ in
-                // Same reason — defer to the next run loop so we don't
-                // publish during a SwiftUI update.
-                DispatchQueue.main.async { self?.publishScrollState() }
-            }
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(scrollBoundsDidChange),
+                name: NSView.boundsDidChangeNotification,
+                object: scrollView.contentView
+            )
 
             DispatchQueue.main.async { [weak self] in self?.publishScrollState() }
+        }
+
+        /// Bounds changes for the editor's clip view post on the main
+        /// thread as the user scrolls.
+        @objc private func scrollBoundsDidChange(_ note: Notification) {
+            // Same reason — defer to the next run loop so we don't
+            // publish during a SwiftUI update.
+            Task { @MainActor [weak self] in self?.publishScrollState() }
         }
 
         @MainActor
@@ -728,12 +736,16 @@ struct EditorView: NSViewRepresentable {
             }
             let theme = Self.preferredTheme()
 
-            Self.highlightQueue.async { [weak self] in
-                let runs = Self.computeHighlightRuns(source: source, language: lang, theme: theme)
-                DispatchQueue.main.async {
-                    guard let self, self.highlightGeneration == generation else { return }
-                    self.applyHighlightRuns(runs, computedFrom: source)
+            Task { [weak self] in
+                let runs = await withCheckedContinuation { continuation in
+                    Self.highlightQueue.async {
+                        continuation.resume(
+                            returning: Self.computeHighlightRuns(source: source, language: lang, theme: theme)
+                        )
+                    }
                 }
+                guard let self, self.highlightGeneration == generation else { return }
+                self.applyHighlightRuns(runs, computedFrom: source)
             }
         }
 

@@ -62,7 +62,6 @@ private struct ScrollerHost: NSViewRepresentable {
         let scroller = NSScroller(frame: NSRect(x: 0, y: 0, width: 11, height: 100))
         scroller.scrollerStyle = .overlay
         scroller.controlSize = .small
-        scroller.arrowsPosition = .scrollerArrowsNone
         scroller.target = context.coordinator
         scroller.action = #selector(Coordinator.scrollerAction(_:))
         return scroller
