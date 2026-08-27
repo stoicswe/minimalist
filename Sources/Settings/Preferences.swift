@@ -9,6 +9,10 @@ enum PreferenceKeys {
     static let editorFontSize = "pref.editorFontSize"
     static let lastFolderBookmark = "lastFolderBookmark"
     static let openFilePaths = "openFilePaths"
+    /// Security-scoped bookmark per open-file path ([String: Data]) so
+    /// sandboxed relaunches can reopen files that live outside the
+    /// workspace folder's scope.
+    static let openFileBookmarks = "openFileBookmarks"
     static let activeFilePath = "activeFilePath"
     /// Multi-window persistence: an ordered list of `WindowSnapshot` (one
     /// per open window at quit time). Encoded as JSON Data. The primary

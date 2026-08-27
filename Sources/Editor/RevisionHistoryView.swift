@@ -170,8 +170,9 @@ struct RevisionHistoryView: View {
 /// Unified diff renderer in the familiar `git diff` shape — `+` lines on a
 /// green background for additions, `-` lines on red for removals, plain
 /// context lines unmarked, hunk headers (`@@ … @@`) for orientation.
-/// Diff itself is computed by `/usr/bin/diff -u`, so the line alignment
-/// is true-LCS rather than naive index-by-index matching.
+/// Diff itself is computed in-process by `DiffEngine` (Myers algorithm),
+/// so the line alignment is true-LCS rather than naive index-by-index
+/// matching.
 struct DiffView: View {
     let oldText: String
     let newText: String
@@ -276,67 +277,94 @@ struct DiffLine {
 }
 
 enum DiffEngine {
-    /// Run `/usr/bin/diff -u` between two snapshots and parse its unified
-    /// output. Returns an empty array if the files are identical or the
-    /// diff couldn't be computed.
+    /// Compute a unified diff (3 lines of context, `@@` hunk headers)
+    /// between two snapshots, entirely in-process — the sandbox can't
+    /// spawn `/usr/bin/diff`. Uses Swift's built-in Myers difference.
+    /// Returns an empty array when the snapshots are identical.
     static func unified(old: String, new: String) -> [DiffLine] {
-        let tempDir = FileManager.default.temporaryDirectory
-        let oldFile = tempDir.appendingPathComponent("minimalist-diff-old-\(UUID().uuidString).txt")
-        let newFile = tempDir.appendingPathComponent("minimalist-diff-new-\(UUID().uuidString).txt")
-        defer {
-            try? FileManager.default.removeItem(at: oldFile)
-            try? FileManager.default.removeItem(at: newFile)
-        }
-        do {
-            try old.write(to: oldFile, atomically: true, encoding: .utf8)
-            try new.write(to: newFile, atomically: true, encoding: .utf8)
-        } catch {
-            return []
+        var oldLines = old.components(separatedBy: "\n")
+        var newLines = new.components(separatedBy: "\n")
+        // A trailing newline produces a final empty component that isn't
+        // a real line — mirror `diff`'s treatment of line terminators.
+        if oldLines.last == "" { oldLines.removeLast() }
+        if newLines.last == "" { newLines.removeLast() }
+
+        let difference = newLines.difference(from: oldLines)
+        if difference.isEmpty { return [] }
+
+        var removedOld = Set<Int>()
+        var insertedNew = Set<Int>()
+        for change in difference {
+            switch change {
+            case .remove(let offset, _, _): removedOld.insert(offset)
+            case .insert(let offset, _, _): insertedNew.insert(offset)
+            }
         }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/diff")
-        process.arguments = ["-u", oldFile.path, newFile.path]
-        let outPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-        } catch {
-            return []
+        // Interleave both sides into a single op stream: removals first
+        // at each position, then insertions, then matched context.
+        struct Op {
+            let kind: DiffLine.Kind   // .context / .added / .removed
+            let text: String
+            let oldLine: Int          // 1-based, 0 when absent
+            let newLine: Int
         }
-        process.waitUntilExit()
+        var ops: [Op] = []
+        var i = 0
+        var j = 0
+        while i < oldLines.count || j < newLines.count {
+            if i < oldLines.count, removedOld.contains(i) {
+                ops.append(Op(kind: .removed, text: oldLines[i], oldLine: i + 1, newLine: 0))
+                i += 1
+            } else if j < newLines.count, insertedNew.contains(j) {
+                ops.append(Op(kind: .added, text: newLines[j], oldLine: 0, newLine: j + 1))
+                j += 1
+            } else if i < oldLines.count, j < newLines.count {
+                ops.append(Op(kind: .context, text: oldLines[i], oldLine: i + 1, newLine: j + 1))
+                i += 1
+                j += 1
+            } else {
+                break
+            }
+        }
 
-        // `diff` returns 0 when files are identical, 1 when they differ.
-        // Both are valid; only 2+ indicates a real failure.
-        guard process.terminationStatus < 2,
-              let data = try? outPipe.fileHandleForReading.readToEnd(),
-              let raw = String(data: data, encoding: .utf8)
-        else { return [] }
-        return parseUnifiedDiff(raw)
-    }
-
-    private static func parseUnifiedDiff(_ raw: String) -> [DiffLine] {
+        // Group changed ops into hunks with up to `contextRadius` shared
+        // lines of context, exactly like `diff -u`.
+        let contextRadius = 3
         var result: [DiffLine] = []
-        for line in raw.components(separatedBy: "\n") {
-            // `--- a/file` and `+++ b/file` are file headers. Skip.
-            if line.hasPrefix("---") || line.hasPrefix("+++") { continue }
-            if line.hasPrefix("@@") {
-                result.append(DiffLine(kind: .hunk, text: line))
+        var index = 0
+        while index < ops.count {
+            guard ops[index].kind != .context else {
+                index += 1
                 continue
             }
-            if line.hasPrefix("+") {
-                result.append(DiffLine(kind: .added, text: String(line.dropFirst())))
-                continue
+            // Found a change — expand backward for leading context…
+            let hunkStart = max(0, index - contextRadius)
+            // …and forward, merging any changes closer than 2×radius.
+            var hunkEnd = index
+            var cursor = index
+            while cursor < ops.count {
+                if ops[cursor].kind != .context {
+                    hunkEnd = cursor
+                }
+                if cursor - hunkEnd >= contextRadius * 2 { break }
+                cursor += 1
             }
-            if line.hasPrefix("-") {
-                result.append(DiffLine(kind: .removed, text: String(line.dropFirst())))
-                continue
+            let end = min(ops.count - 1, hunkEnd + contextRadius)
+
+            let hunk = ops[hunkStart...end]
+            let oldStart = hunk.first(where: { $0.oldLine > 0 })?.oldLine ?? 0
+            let newStart = hunk.first(where: { $0.newLine > 0 })?.newLine ?? 0
+            let oldCount = hunk.filter { $0.kind != .added }.count
+            let newCount = hunk.filter { $0.kind != .removed }.count
+            result.append(DiffLine(
+                kind: .hunk,
+                text: "@@ -\(oldStart),\(oldCount) +\(newStart),\(newCount) @@"
+            ))
+            for op in hunk {
+                result.append(DiffLine(kind: op.kind, text: op.text))
             }
-            if line.hasPrefix(" ") {
-                result.append(DiffLine(kind: .context, text: String(line.dropFirst())))
-                continue
-            }
+            index = end + 1
         }
         return result
     }

@@ -1,5 +1,5 @@
 {
-  "originHash" : "7cc472d6ada6e18c219d3ed1e04c80d17dc18d32e7f2aa693bd975bf9670bdd5",
+  "originHash" : "7ba3b5b0bd99d5d387f33c20314425f96a0fed89894bf0c156943b3fd1b58a95",
   "pins" : [
     {
       "identity" : "highlightr",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "05e7fcc63b33925cd0c1faaa205cdd5681e7bbef",
         "version" : "2.3.0"
+      }
+    },
+    {
+      "identity" : "libgit2",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ibrahimcetin/libgit2.git",
+      "state" : {
+        "revision" : "52287b0914f300f916b58fec80e13d8dd8f6824f",
+        "version" : "1.9.2"
       }
     },
     {

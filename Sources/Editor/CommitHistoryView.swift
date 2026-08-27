@@ -192,43 +192,29 @@ struct FileCommit: Hashable, Identifiable {
 
 enum FileCommitLog {
     static func fetch(rel: String, in workingDir: URL, limit: Int = 200) -> [FileCommit] {
-        let raw = run([
-            "log", "--pretty=format:%H|%an|%aI|%s", "-n", "\(limit)", "--", rel
-        ], in: workingDir)
-        guard let raw else { return [] }
-        let formatter = ISO8601DateFormatter()
-        return raw.split(whereSeparator: \.isNewline).compactMap { line in
-            let parts = line.split(separator: "|", maxSplits: 3)
-            guard parts.count == 4 else { return nil }
-            return FileCommit(
-                sha: String(parts[0]),
-                author: String(parts[1]),
-                date: formatter.date(from: String(parts[2])) ?? Date(),
-                subject: String(parts[3])
+        guard let (repo, repoRel) = openRepo(rel: rel, in: workingDir) else { return [] }
+        return repo.fileLog(relativePath: repoRel, limit: limit).map { commit in
+            FileCommit(
+                sha: commit.sha,
+                author: commit.author,
+                date: commit.date,
+                subject: commit.subject
             )
         }
     }
 
     static func diff(sha: String, rel: String, in workingDir: URL) -> String? {
-        run(["show", "--no-color", "--pretty=format:%n", sha, "--", rel], in: workingDir)
+        guard let (repo, repoRel) = openRepo(rel: rel, in: workingDir) else { return nil }
+        return repo.patch(commitSHA: sha, relativePath: repoRel)
     }
 
-    private static func run(_ args: [String], in workingDir: URL) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = args
-        process.currentDirectoryURL = workingDir
-        let outPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-        } catch {
-            return nil
-        }
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8)
+    /// Open the repository containing `workingDir` and translate `rel`
+    /// (relative to the workspace folder) into a repo-root-relative
+    /// path — the workspace may be a subfolder of the actual repo.
+    private static func openRepo(rel: String, in workingDir: URL) -> (GitClient, String)? {
+        guard let repo = GitClient.open(containing: workingDir) else { return nil }
+        let absolute = workingDir.appendingPathComponent(rel)
+        guard let repoRel = repo.repoRelativePath(of: absolute) else { return nil }
+        return (repo, repoRel)
     }
 }

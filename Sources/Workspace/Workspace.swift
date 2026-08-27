@@ -413,9 +413,8 @@ final class Workspace: ObservableObject {
                 relativeTo: nil
             )
         }
-        let openPaths = openDocuments
-            .filter { !$0.isUntitled && !$0.isPreview }
-            .map { $0.url.path }
+        let persistedDocs = openDocuments.filter { !$0.isUntitled && !$0.isPreview }
+        let openPaths = persistedDocs.map { $0.url.path }
         let activePath: String? = {
             guard let active = activeDocument, !active.isUntitled, !active.isPreview else {
                 return nil
@@ -425,8 +424,47 @@ final class Workspace: ObservableObject {
         return WindowSnapshot(
             folderBookmark: bookmark,
             openFilePaths: openPaths,
-            activeFilePath: activePath
+            activeFilePath: activePath,
+            openFileBookmarks: Self.fileBookmarks(for: persistedDocs)
         )
+    }
+
+    /// Security-scoped bookmarks for the given documents, keyed by path.
+    /// Created while the files are still accessible (they're open), so a
+    /// sandboxed relaunch can regain access even for files outside the
+    /// workspace folder's scope.
+    private static func fileBookmarks(for docs: [Document]) -> [String: Data] {
+        var bookmarks: [String: Data] = [:]
+        for doc in docs {
+            if let data = try? doc.url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            ) {
+                bookmarks[doc.url.path] = data
+            }
+        }
+        return bookmarks
+    }
+
+    /// Resolve a persisted file path back into a readable URL. Direct
+    /// path access works for files inside the restored folder's scope;
+    /// anything else goes through its security-scoped bookmark. The
+    /// scope stays active for the app's lifetime, matching the document
+    /// staying open.
+    private static func resolvePersistedFile(path: String, bookmarks: [String: Data]?) -> URL? {
+        if FileManager.default.isReadableFile(atPath: path) {
+            return URL(fileURLWithPath: path)
+        }
+        guard let data = bookmarks?[path] else { return nil }
+        var stale = false
+        guard let resolved = try? URL(
+            resolvingBookmarkData: data,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &stale
+        ), resolved.startAccessingSecurityScopedResource() else { return nil }
+        return resolved
     }
 
     /// Apply a previously captured snapshot — resolve the folder bookmark,
@@ -453,8 +491,10 @@ final class Workspace: ObservableObject {
         }
 
         for path in snapshot.openFilePaths {
-            let url = URL(fileURLWithPath: path)
-            guard FileManager.default.isReadableFile(atPath: url.path) else { continue }
+            guard let url = Self.resolvePersistedFile(
+                path: path,
+                bookmarks: snapshot.openFileBookmarks
+            ) else { continue }
             guard let doc = Document(url: url) else { continue }
             doc.isPreview = false
             openDocuments.append(doc)
@@ -525,10 +565,13 @@ final class Workspace: ObservableObject {
     /// plus the active one, so they can be restored on next launch.
     func persistOpenFiles() {
         guard shouldPersist else { return }
-        let paths = openDocuments
-            .filter { !$0.isUntitled && !$0.isPreview }
-            .map { $0.url.path }
+        let persistedDocs = openDocuments.filter { !$0.isUntitled && !$0.isPreview }
+        let paths = persistedDocs.map { $0.url.path }
         UserDefaults.standard.set(paths, forKey: PreferenceKeys.openFilePaths)
+        UserDefaults.standard.set(
+            Self.fileBookmarks(for: persistedDocs),
+            forKey: PreferenceKeys.openFileBookmarks
+        )
         if let active = activeDocument, !active.isUntitled, !active.isPreview {
             UserDefaults.standard.set(active.url.path, forKey: PreferenceKeys.activeFilePath)
         } else {
@@ -540,10 +583,11 @@ final class Workspace: ObservableObject {
         guard let paths = UserDefaults.standard.stringArray(forKey: PreferenceKeys.openFilePaths)
         else { return }
 
+        let bookmarks = UserDefaults.standard
+            .dictionary(forKey: PreferenceKeys.openFileBookmarks) as? [String: Data]
         let activePath = UserDefaults.standard.string(forKey: PreferenceKeys.activeFilePath)
         for path in paths {
-            let url = URL(fileURLWithPath: path)
-            guard FileManager.default.isReadableFile(atPath: url.path) else { continue }
+            guard let url = Self.resolvePersistedFile(path: path, bookmarks: bookmarks) else { continue }
             guard let doc = Document(url: url) else { continue }
             doc.isPreview = false
             openDocuments.append(doc)

@@ -8,8 +8,18 @@ struct WindowSnapshot: Codable, Hashable {
     var folderBookmark: Data?
     var openFilePaths: [String]
     var activeFilePath: String?
+    /// Security-scoped bookmark per open-file path. Under App Sandbox a
+    /// bare path grants no access after relaunch — files outside the
+    /// workspace folder's scope are reopened through these. Optional so
+    /// snapshots saved by pre-sandbox builds still decode.
+    var openFileBookmarks: [String: Data]?
 
-    static let empty = WindowSnapshot(folderBookmark: nil, openFilePaths: [], activeFilePath: nil)
+    static let empty = WindowSnapshot(
+        folderBookmark: nil,
+        openFilePaths: [],
+        activeFilePath: nil,
+        openFileBookmarks: nil
+    )
 }
 
 enum SavedWindowsStore {

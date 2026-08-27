@@ -29,6 +29,7 @@
 		3E08EFA9FA198CC25A77BB0F /* PreferenceSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E1A344324CF69501C606FD /* PreferenceSync.swift */; };
 		402B0DBAAE8ECD5DD5DA1A07 /* ZenModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB3CD14026BE84BF3ED4BB1C /* ZenModeView.swift */; };
 		4202B6EF3D150B31AD73B915 /* GitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5F1EE282C55FBE994106E04 /* GitService.swift */; };
+		459B3C19B260191874593E0E /* libgit2 in Frameworks */ = {isa = PBXBuildFile; productRef = 75F89F0F14B5E51219CC24A4 /* libgit2 */; };
 		4CA35153C147D21BC679D4AD /* EditorScrollbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E7E11EA9AA8C95B4A88725A /* EditorScrollbar.swift */; };
 		4CA39BC8B1F8735D6AE38F18 /* FileTypeStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5FE8ACFECC60325B96A0B6 /* FileTypeStyle.swift */; };
 		569ACB93CA5584CE9AB34B04 /* TopBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8701DD22018E0572B7B4E7B1 /* TopBar.swift */; };
@@ -42,6 +43,7 @@
 		76208B3E7798E2E84EF59874 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA9F07BC8EF48AFD1D2016C9 /* ContentView.swift */; };
 		7CEFD086CF8362E2DA0E92E9 /* WindowDraggableArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = A14FCF1165FE661196FFA04E /* WindowDraggableArea.swift */; };
 		7D08D471378330521F79C816 /* VideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38E50EEF3E0C6E1946F34990 /* VideoPlayerView.swift */; };
+		80057F0ADC8BFC24D957D748 /* GitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF5B91E50406B5A396157E14 /* GitClient.swift */; };
 		84E5414D515D1EC220C4A38B /* FileIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2B467BEDDBB3749A289F0F /* FileIcon.swift */; };
 		8BF6BACC0E0E4FA5A95C3C89 /* CompletionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FA9F6EFE6E173ADD098DB4A /* CompletionEngine.swift */; };
 		92DC2A3BFA94DB4F65B709BB /* StatusPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DB5385D10631E61590A8491 /* StatusPill.swift */; };
@@ -125,7 +127,8 @@
 		E37370CC6867061BFE04BE18 /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
 		E6FEE8F5CD3B7E4E3B9ED3C2 /* DocumentKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentKind.swift; sourceTree = "<group>"; };
 		EB3CD14026BE84BF3ED4BB1C /* ZenModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZenModeView.swift; sourceTree = "<group>"; };
-		F56F3E79F18F96559A2CB543 /* Minimalist.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Minimalist.storekit; sourceTree = "<group>"; };
+		F56F3E79F18F96559A2CB543 /* Minimalist.storekit */ = {isa = PBXFileReference; path = Minimalist.storekit; sourceTree = "<group>"; };
+		FF5B91E50406B5A396157E14 /* GitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -135,6 +138,7 @@
 			files = (
 				CF17CF554C1677B2F9DDE345 /* Highlightr in Frameworks */,
 				BC80E51F479068FDEB0C7D30 /* MarkdownUI in Frameworks */,
+				459B3C19B260191874593E0E /* libgit2 in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -171,6 +175,7 @@
 		33AC7E75B5306BA40CBA89AF /* Git */ = {
 			isa = PBXGroup;
 			children = (
+				FF5B91E50406B5A396157E14 /* GitClient.swift */,
 				C5F1EE282C55FBE994106E04 /* GitService.swift */,
 				2FA63A0790BD5CA82FC09EB5 /* GitState.swift */,
 			);
@@ -312,6 +317,7 @@
 			packageProductDependencies = (
 				E88D5839AFC0F9C8757DC067 /* Highlightr */,
 				ADE1FBF89FBDA3E9942068DF /* MarkdownUI */,
+				75F89F0F14B5E51219CC24A4 /* libgit2 */,
 			);
 			productName = Minimalist;
 			productReference = 5C6493A2C9404E0398974FE1 /* Minimalist.app */;
@@ -324,7 +330,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2700;
+				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					5C322A9C71CDE4D754819862 = {
 						DevelopmentTeam = P22P7U46RW;
@@ -344,6 +350,7 @@
 			packageReferences = (
 				8BAB3EBB0B70CBFFABB03191 /* XCRemoteSwiftPackageReference "Highlightr" */,
 				21EF83BCDF41EEC9CF9630FA /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+				9AF795DF6D4D708A9DC31206 /* XCRemoteSwiftPackageReference "libgit2" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 89235997BD7D87E32B715A48 /* Products */;
@@ -394,6 +401,7 @@
 				5A91F9162479362AA60C859A /* FileOperations.swift in Sources */,
 				DCD0BCFE758E848375220DAB /* FileTreeView.swift in Sources */,
 				4CA39BC8B1F8735D6AE38F18 /* FileTypeStyle.swift in Sources */,
+				80057F0ADC8BFC24D957D748 /* GitClient.swift in Sources */,
 				4202B6EF3D150B31AD73B915 /* GitService.swift in Sources */,
 				DDDDCF9247529AA008A59A7A /* GitState.swift in Sources */,
 				CDFF7DA5814440CCF98089DA /* HexViewerView.swift in Sources */,
@@ -438,16 +446,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Resources/Minimalist.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				INFOPLIST_FILE = Resources/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = m.Txt;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stoicswe.minimalist;
 				SDKROOT = macosx;
 			};
@@ -488,13 +492,11 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = P22P7U46RW;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -509,7 +511,6 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_STRICT_CONCURRENCY = minimal;
@@ -552,13 +553,11 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = P22P7U46RW;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -580,7 +579,6 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = minimal;
@@ -594,16 +592,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Resources/Minimalist.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				INFOPLIST_FILE = Resources/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = m.Txt;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stoicswe.minimalist;
 				SDKROOT = macosx;
 			};
@@ -649,9 +643,22 @@
 				minimumVersion = 2.2.1;
 			};
 		};
+		9AF795DF6D4D708A9DC31206 /* XCRemoteSwiftPackageReference "libgit2" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ibrahimcetin/libgit2.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.9.2;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		75F89F0F14B5E51219CC24A4 /* libgit2 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9AF795DF6D4D708A9DC31206 /* XCRemoteSwiftPackageReference "libgit2" */;
+			productName = libgit2;
+		};
 		ADE1FBF89FBDA3E9942068DF /* MarkdownUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 21EF83BCDF41EEC9CF9630FA /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;

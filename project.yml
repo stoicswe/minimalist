@@ -28,6 +28,12 @@ packages:
   MarkdownUI:
     url: https://github.com/gonzalezreal/swift-markdown-ui
     from: 2.4.0
+  # libgit2 compiled from source via SPM. Replaces /usr/bin/git
+  # subprocesses, which App Sandbox (required for TestFlight / Mac App
+  # Store) forbids. GPLv2 with linking exception — safe to embed.
+  libgit2:
+    url: https://github.com/ibrahimcetin/libgit2.git
+    exactVersion: 1.9.2
 
 targets:
   Minimalist:
@@ -174,6 +180,16 @@ targets:
     entitlements:
       path: Resources/Minimalist.entitlements
       properties:
+        # App Sandbox — required for TestFlight / Mac App Store builds.
+        com.apple.security.app-sandbox: true
+        # Read/write access to whatever the user picks in open/save
+        # panels or drags onto the app.
+        com.apple.security.files.user-selected.read-write: true
+        # Security-scoped bookmarks so the last folder and open tabs can
+        # be restored across launches.
+        com.apple.security.files.bookmarks.app-scope: true
+        # Remote images in the markdown reader.
+        com.apple.security.network.client: true
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
     settings:
       base:
@@ -184,6 +200,7 @@ targets:
     dependencies:
       - package: Highlightr
       - package: MarkdownUI
+      - package: libgit2
 
 schemes:
   Minimalist:

@@ -50,11 +50,27 @@ final class RevisionTracker {
             try? "*\n".write(to: ignoreURL, atomically: true, encoding: .utf8)
         }
         if !fm.fileExists(atPath: gitDir.path) {
-            runGit(["init", "-q"])
-            runGit(["config", "user.name", "Minimalist"])
-            runGit(["config", "user.email", "minimalist@local"])
-            runGit(["commit", "--allow-empty", "-q", "-m", "Initial"])
+            // Embedded libgit2 (`GitClient`) rather than /usr/bin/git —
+            // the sandbox can't spawn subprocesses. Commit identity is
+            // passed per-commit, so no repo config is needed.
+            if let repo = try? GitClient.create(at: filesDir) {
+                try? repo.commit(
+                    message: "Initial",
+                    authorName: Self.signatureName,
+                    authorEmail: Self.signatureEmail
+                )
+            }
         }
+    }
+
+    /// Identity stamped on every `.minimal` mirror commit.
+    private static let signatureName = "Minimalist"
+    private static let signatureEmail = "minimalist@local"
+
+    /// The mirror repo, opened exactly at `.minimal/files` — never via
+    /// parent search, which could wrongly land on the user's own repo.
+    private func mirrorRepo() -> GitClient? {
+        GitClient.open(at: filesDir)
     }
 
     // MARK: - Path helpers
@@ -132,20 +148,25 @@ final class RevisionTracker {
         } catch {
             return false
         }
-        let escaped = rel.replacingOccurrences(of: "\"", with: "\\\"")
-        runGit(["add", "--", rel])
-        let msg = message ?? "Save \(escaped)"
-        // `--allow-empty` because if the user saves with no changes the
-        // git commit would otherwise fail and we'd silently lose the
-        // history entry the user explicitly asked for.
-        runGit(["commit", "-q", "--allow-empty", "-m", msg])
+        guard let repo = mirrorRepo() else { return false }
+        // Best-effort, like the old subprocess calls: a failed stage or
+        // commit must never disrupt the user's editing flow. The commit
+        // always lands even when the content is unchanged — the history
+        // entry the user explicitly asked for shouldn't silently vanish
+        // (the old `--allow-empty` behavior).
+        try? repo.stage(relativePath: rel)
+        try? repo.commit(
+            message: message ?? "Save \(rel)",
+            authorName: Self.signatureName,
+            authorEmail: Self.signatureEmail
+        )
         return true
     }
 
     /// Commit a batch of files at once — used at app quit so all the open
     /// dirty docs land as a single "session end" snapshot.
     func commitSessionEnd(files: [(url: URL, content: String)]) {
-        guard !files.isEmpty else { return }
+        guard !files.isEmpty, let repo = mirrorRepo() else { return }
         for entry in files {
             guard let rel = relativePath(for: entry.url) else { continue }
             let dest = filesDir.appendingPathComponent(rel)
@@ -154,10 +175,14 @@ final class RevisionTracker {
                 withIntermediateDirectories: true
             )
             try? entry.content.write(to: dest, atomically: true, encoding: .utf8)
-            runGit(["add", "--", rel])
+            try? repo.stage(relativePath: rel)
         }
         let formatter = ISO8601DateFormatter()
-        runGit(["commit", "-q", "--allow-empty", "-m", "Session end \(formatter.string(from: Date()))"])
+        try? repo.commit(
+            message: "Session end \(formatter.string(from: Date()))",
+            authorName: Self.signatureName,
+            authorEmail: Self.signatureEmail
+        )
     }
 
     // MARK: - Reading history
@@ -188,21 +213,13 @@ final class RevisionTracker {
     }
 
     private func commits(for rel: String) -> [Revision] {
-        guard let raw = runGitCapturing([
-            "log",
-            "--pretty=format:%H|%aI|%s",
-            "-n", "200",
-            "--", rel,
-        ]) else { return [] }
-        return raw.split(whereSeparator: \.isNewline).compactMap { line in
-            let parts = line.split(separator: "|", maxSplits: 2)
-            guard parts.count == 3 else { return nil }
-            let date = ISO8601DateFormatter().date(from: String(parts[1])) ?? Date()
-            return Revision(
+        guard let repo = mirrorRepo() else { return [] }
+        return repo.fileLog(relativePath: rel, limit: 200).map { commit in
+            Revision(
                 kind: .commit,
-                identifier: String(parts[0]),
-                date: date,
-                summary: String(parts[2])
+                identifier: commit.sha,
+                date: commit.date,
+                summary: commit.subject
             )
         }
     }
@@ -215,7 +232,7 @@ final class RevisionTracker {
             return try? String(contentsOf: snapURL, encoding: .utf8)
         case .commit:
             guard let rel = relativePath(for: url) else { return nil }
-            return runGitCapturing(["show", "\(revision.identifier):\(rel)"])
+            return mirrorRepo()?.blobContent(commitSHA: revision.identifier, relativePath: rel)
         }
     }
 
@@ -232,42 +249,6 @@ final class RevisionTracker {
         return restored
     }
 
-    // MARK: - Git helpers
-
-    private func runGit(_ args: [String]) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = args
-        process.currentDirectoryURL = filesDir
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            // Swallow — `.minimal` tracking is best-effort and shouldn't
-            // disrupt the user's editing flow.
-        }
-    }
-
-    private func runGitCapturing(_ args: [String]) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = args
-        process.currentDirectoryURL = filesDir
-        let outPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-        } catch {
-            return nil
-        }
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8)
-    }
 }
 
 /// One entry in a file's history — either an autosave snapshot or a
