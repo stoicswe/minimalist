@@ -127,7 +127,7 @@
 		E37370CC6867061BFE04BE18 /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
 		E6FEE8F5CD3B7E4E3B9ED3C2 /* DocumentKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentKind.swift; sourceTree = "<group>"; };
 		EB3CD14026BE84BF3ED4BB1C /* ZenModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZenModeView.swift; sourceTree = "<group>"; };
-		F56F3E79F18F96559A2CB543 /* Minimalist.storekit */ = {isa = PBXFileReference; path = Minimalist.storekit; sourceTree = "<group>"; };
+		F56F3E79F18F96559A2CB543 /* Minimalist.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Minimalist.storekit; sourceTree = "<group>"; };
 		FF5B91E50406B5A396157E14 /* GitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -447,11 +447,14 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Minimalist.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Resources/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = m.Txt;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stoicswe.minimalist;
 				SDKROOT = macosx;
 			};
@@ -593,11 +596,14 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Minimalist.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Resources/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = m.Txt;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stoicswe.minimalist;
 				SDKROOT = macosx;
 			};
