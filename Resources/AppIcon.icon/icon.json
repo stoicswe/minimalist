@@ -1,0 +1,96 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "display-p3:0.66061,0.30366,1.00000,1.00000",
+      "display-p3:0.96783,0.71153,0.94596,1.00000"
+    ],
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 0
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.7
+      }
+    }
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "mTxt_Brackets.png",
+          "name" : "mTxt_Brackets",
+          "position" : {
+            "scale" : 0.96,
+            "translation-in-points" : [
+              0,
+              27.145000000000095
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "blend-mode" : "overlay",
+          "hidden" : true,
+          "image-name" : "mtxt_font.png",
+          "name" : "mtxt_font",
+          "position" : {
+            "scale" : 0.44,
+            "translation-in-points" : [
+              -4.079999999999927,
+              -13.940000000000055
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "mtxt_font 2.png",
+          "name" : "mtxt_font 2",
+          "position" : {
+            "scale" : 0.44,
+            "translation-in-points" : [
+              -2.4200000000000728,
+              -17.680000000000064
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [
+      "macOS"
+    ]
+  }
+}

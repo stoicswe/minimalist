@@ -6,6 +6,11 @@ options:
   createIntermediateGroups: true
   groupSortPosition: top
 
+# Loose project files (no target membership). The StoreKit configuration
+# must live in the project so the scheme's StoreKit setting can find it.
+fileGroups:
+  - Minimalist.storekit
+
 settings:
   base:
     DEVELOPMENT_TEAM: P22P7U46RW
@@ -32,6 +37,11 @@ targets:
     sources:
       - path: Sources
       - path: Resources/Assets.xcassets
+      # Icon Composer app icon (macOS 26 layered/glass format). actool
+      # compiles it; ASSETCATALOG_COMPILER_APPICON_NAME selects it by
+      # basename.
+      - path: Resources/AppIcon.icon
+        buildPhase: resources
       - path: Resources/asciidoctor
         type: folder
         buildPhase: resources
@@ -174,3 +184,21 @@ targets:
     dependencies:
       - package: Highlightr
       - package: MarkdownUI
+
+schemes:
+  Minimalist:
+    build:
+      targets:
+        Minimalist: all
+    run:
+      config: Debug
+      # Local tip-jar testing: Run uses the test products in
+      # Minimalist.storekit. Archive/Release builds ignore this and talk
+      # to the real App Store.
+      storeKitConfiguration: Minimalist.storekit
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

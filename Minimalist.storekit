@@ -1,0 +1,63 @@
+{
+  "identifier" : "8F4C2A1E-6B3D-4E9F-A2C5-1D7E8B9F0A34",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "1A2B3C4D-0001-4000-8000-000000000001",
+      "localizations" : [
+        {
+          "description" : "A little jolt of encouragement.",
+          "displayName" : "Espresso Bean",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.stoicswe.minimalist.tip.small",
+      "referenceName" : "Tip — Espresso Bean",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "1A2B3C4D-0002-4000-8000-000000000002",
+      "localizations" : [
+        {
+          "description" : "Keeps the commits brewing.",
+          "displayName" : "Cup o' Joe",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.stoicswe.minimalist.tip.medium",
+      "referenceName" : "Tip — Cup o' Joe",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "7.99",
+      "familyShareable" : false,
+      "internalID" : "1A2B3C4D-0003-4000-8000-000000000003",
+      "localizations" : [
+        {
+          "description" : "Fancy fuel for late-night features.",
+          "displayName" : "Iced Shaken Cold Brew",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.stoicswe.minimalist.tip.large",
+      "referenceName" : "Tip — Iced Shaken Cold Brew",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

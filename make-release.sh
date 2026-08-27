@@ -62,8 +62,8 @@ fi
 
 # --- Version computation --------------------------------------------------
 
-log "Generating app icon"
-swift make-icon.swift
+# The app icon is the Icon Composer file at Resources/AppIcon.icon,
+# compiled by actool during the build — no generation step needed.
 
 log "Regenerating Xcode project"
 xcodegen generate
