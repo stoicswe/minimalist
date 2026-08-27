@@ -21,7 +21,8 @@ struct FileTreeView: View {
                                 depth: 0,
                                 expandedByDefault: true,
                                 historyContext: $historyContext,
-                                rightClickedURL: $rightClickedURL
+                                rightClickedURL: $rightClickedURL,
+                                allowsCompaction: false
                             )
                             // Trailing spacer that always fills the rest
                             // of the viewport so right-clicks anywhere
@@ -155,17 +156,76 @@ private struct FolderRowList: View {
     let expandedByDefault: Bool
     @Binding var historyContext: HistoryContext?
     @Binding var rightClickedURL: URL?
+    /// Dotted name path accumulated from compacted ancestor folders
+    /// (e.g. `"io.github."`). Empty for a normal, uncompacted row.
+    var namePrefix: String = ""
+    /// URL of the outermost folder of a compacted chain — dragging the
+    /// combined row should move that folder, not just the innermost one.
+    var chainHeadURL: URL? = nil
+    /// The workspace root always renders as itself; everything below it
+    /// may compact into its single-subfolder child (IntelliJ-style
+    /// `a.b.c` rows).
+    var allowsCompaction: Bool = true
     @AppStorage(PreferenceKeys.accentPresetID)
     private var rightClickAccentID: String = AccentPresets.defaultID
 
     @State private var expanded: Bool = false
-    @State private var loaded: Bool = false
+    @State private var hasAppeared: Bool = false
 
     @State private var isDropTarget = false
 
     var body: some View {
+        Group {
+            if let solo = compactedChild {
+                // Folder-chain compaction: this folder's only entry is
+                // another folder, so it renders as a single combined
+                // `parent.child` row. Recursing keeps every chain link
+                // observed, so filesystem changes un-compact correctly.
+                FolderRowList(
+                    node: solo,
+                    depth: depth,
+                    expandedByDefault: false,
+                    historyContext: $historyContext,
+                    rightClickedURL: $rightClickedURL,
+                    namePrefix: namePrefix + node.name + ".",
+                    chainHeadURL: chainHeadURL ?? node.url
+                )
+            } else {
+                rowAndChildren
+            }
+        }
+        .onAppear {
+            // Children load eagerly (one shallow directory read) so the
+            // row can tell whether it should compact into its child.
+            node.loadChildrenIfNeeded()
+            if expandedByDefault && !hasAppeared {
+                expanded = true
+            }
+            hasAppeared = true
+        }
+    }
+
+    /// The single subfolder this row compacts into, when eligible.
+    private var compactedChild: FileNode? {
+        guard allowsCompaction,
+              let children = node.children,
+              children.count == 1,
+              let solo = children.first,
+              solo.isDirectory,
+              !solo.name.hasPrefix(".")
+        else { return nil }
+        return solo
+    }
+
+    private var rowAndChildren: some View {
         VStack(alignment: .leading, spacing: 1) {
-            DirectoryRow(node: node, depth: depth, expanded: $expanded, dropHighlight: isDropTarget)
+            DirectoryRow(
+                node: node,
+                displayName: namePrefix + node.name,
+                depth: depth,
+                expanded: $expanded,
+                dropHighlight: isDropTarget
+            )
                 .overlay(rightClickOutline(for: node.url))
                 .background(RightClickReporter { rightClickedURL = node.url })
                 .contextMenu {
@@ -177,13 +237,10 @@ private struct FolderRowList: View {
                 }
                 .onTapGesture {
                     expanded.toggle()
-                    if expanded && !loaded {
-                        node.loadChildrenIfNeeded()
-                        loaded = true
-                    }
+                    node.loadChildrenIfNeeded()
                 }
                 .onDrag {
-                    NSItemProvider(object: node.url as NSURL)
+                    NSItemProvider(object: (chainHeadURL ?? node.url) as NSURL)
                 }
                 .onDrop(of: [.fileURL], isTargeted: $isDropTarget) { providers in
                     handleDrop(providers: providers, into: node.url)
@@ -208,13 +265,6 @@ private struct FolderRowList: View {
                         )
                     }
                 }
-            }
-        }
-        .onAppear {
-            if expandedByDefault && !loaded {
-                expanded = true
-                node.loadChildrenIfNeeded()
-                loaded = true
             }
         }
     }
@@ -248,13 +298,7 @@ private struct FolderRowList: View {
                         guard FileOperations.copy(url, into: folder) != nil else { return }
                     }
                     node.reloadChildren()
-                    if !expanded {
-                        expanded = true
-                        if !loaded {
-                            node.loadChildrenIfNeeded()
-                            loaded = true
-                        }
-                    }
+                    if !expanded { expanded = true }
                 }
             }
         }
@@ -293,6 +337,9 @@ private func resolveDroppedURL(from item: Any?) -> URL? {
 
 private struct DirectoryRow: View {
     @ObservedObject var node: FileNode
+    /// Name shown for the row — the folder's own name, or the dotted
+    /// `parent.child` path when the row represents a compacted chain.
+    let displayName: String
     let depth: Int
     @Binding var expanded: Bool
     var dropHighlight: Bool = false
@@ -307,7 +354,7 @@ private struct DirectoryRow: View {
                 .frame(width: 10)
             FileIcon(isDirectory: true, isOpen: expanded, url: node.url)
                 .frame(width: 16, height: 16)
-            Text(node.name)
+            Text(displayName)
                 .font(.system(size: 12))
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -316,7 +363,7 @@ private struct DirectoryRow: View {
         .padding(.leading, CGFloat(depth) * 12 + 8)
         .padding(.trailing, 8)
         .padding(.vertical, 3)
-        .opacity(node.name.hasPrefix(".") ? 0.50 : 1)
+        .opacity(displayName.hasPrefix(".") ? 0.50 : 1)
         .background(rowBackground)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }

@@ -9,9 +9,13 @@ final class Document: Identifiable, ObservableObject {
     @Published var isPreview: Bool = false
     @Published var text: String {
         didSet {
-            isDirty = (text != savedText)
+            let dirty = (text != savedText)
+            // Only publish transitions — re-assigning the same value on
+            // every keystroke makes every observer of this document
+            // (tab, status pill, minimap…) re-render twice per edit.
+            if isDirty != dirty { isDirty = dirty }
             // Editing a preview tab pins it.
-            if isDirty && isPreview { isPreview = false }
+            if dirty && isPreview { isPreview = false }
         }
     }
     @Published var lineEnding: LineEnding

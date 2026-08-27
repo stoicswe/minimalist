@@ -3,6 +3,13 @@ import AppKit
 final class LineNumberRulerView: NSRulerView {
     weak var hostTextView: NSTextView?
 
+    /// Cached UTF-16 offsets of every line start, so scrolling doesn't
+    /// re-walk the document from character zero on every draw (that walk
+    /// made scrolling large files crawl). Invalidated whenever the text
+    /// storage is edited; rebuilt lazily on the next draw.
+    private var lineStartsCache: [Int]?
+    private var lineStartsCacheLength = -1
+
     init(textView: NSTextView) {
         self.hostTextView = textView
         super.init(scrollView: textView.enclosingScrollView, orientation: .verticalRuler)
@@ -21,6 +28,18 @@ final class LineNumberRulerView: NSRulerView {
             name: NSText.didChangeNotification,
             object: textView
         )
+        // User typing posts NSText.didChange, but programmatic edits
+        // (external text replacement, ghost-suggestion insertions) only
+        // surface at the storage level — observe it so the line-start
+        // cache never goes stale.
+        if let storage = textView.textStorage {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(storageDidProcessEditing),
+                name: NSTextStorage.didProcessEditingNotification,
+                object: storage
+            )
+        }
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(viewBoundsDidChange),
@@ -50,6 +69,10 @@ final class LineNumberRulerView: NSRulerView {
     }
 
     @objc private func textDidChange() { needsDisplay = true }
+    @objc private func storageDidProcessEditing() {
+        lineStartsCache = nil
+        needsDisplay = true
+    }
     @objc private func viewBoundsDidChange() { needsDisplay = true }
     @objc private func appearanceOrPrefsChanged() { needsDisplay = true }
 
@@ -92,14 +115,9 @@ final class LineNumberRulerView: NSRulerView {
         let charRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
         let nsString = textView.string as NSString
 
-        // Walk from start to find the line number of the first visible character.
-        var currentLine = 1
-        var idx = 0
-        while idx < charRange.location {
-            let lineRange = nsString.lineRange(for: NSRange(location: idx, length: 0))
-            idx = NSMaxRange(lineRange)
-            currentLine += 1
-        }
+        let starts = lineStarts(for: nsString)
+        var lineIdx = lineIndex(containing: charRange.location, in: starts)
+        var currentLine = lineIdx + 1
 
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular),
@@ -107,12 +125,11 @@ final class LineNumberRulerView: NSRulerView {
         ]
 
         let inset = textView.textContainerInset.height
-        idx = charRange.location
+        var idx = starts[lineIdx]
         let endIdx = NSMaxRange(charRange)
 
         while idx <= endIdx {
-            let lineRange = nsString.lineRange(for: NSRange(location: idx, length: 0))
-            let glyphIndex = layoutManager.glyphIndexForCharacter(at: lineRange.location)
+            let glyphIndex = layoutManager.glyphIndexForCharacter(at: idx)
             var effectiveRange = NSRange(location: 0, length: 0)
             let lineFragmentRect = layoutManager.lineFragmentRect(
                 forGlyphAt: glyphIndex,
@@ -130,10 +147,76 @@ final class LineNumberRulerView: NSRulerView {
             )
             label.draw(at: labelOrigin, withAttributes: attrs)
 
-            if NSMaxRange(lineRange) == lineRange.location { break }
-            idx = NSMaxRange(lineRange)
+            let next = (lineIdx + 1 < starts.count) ? starts[lineIdx + 1] : nsString.length
+            if next == idx { break }
+            idx = next
+            lineIdx += 1
             currentLine += 1
             if idx >= nsString.length { break }
         }
+    }
+
+    // MARK: - Line index
+
+    /// Rebuild (or return) the cached array of line-start offsets. The
+    /// scan copies characters out in chunks, so rebuilding a multi-
+    /// megabyte document takes a few milliseconds — and it only happens
+    /// after an edit, never per scroll frame.
+    private func lineStarts(for nsString: NSString) -> [Int] {
+        let length = nsString.length
+        if let cached = lineStartsCache, lineStartsCacheLength == length {
+            return cached
+        }
+
+        var starts: [Int] = [0]
+        starts.reserveCapacity(max(16, length / 32))
+        var buffer = [unichar](repeating: 0, count: 8192)
+        var offset = 0
+        var previousWasCR = false
+        while offset < length {
+            let chunkLength = min(buffer.count, length - offset)
+            nsString.getCharacters(&buffer, range: NSRange(location: offset, length: chunkLength))
+            for i in 0..<chunkLength {
+                let char = buffer[i]
+                let absolute = offset + i
+                if previousWasCR {
+                    previousWasCR = false
+                    if char == 0x0A {
+                        // CRLF is a single line break — move the start
+                        // recorded after the CR past the LF.
+                        starts[starts.count - 1] = absolute + 1
+                        continue
+                    }
+                }
+                // LF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR, and CR(LF)
+                // — the exact set NSString.lineRange(for:) breaks on
+                // (notably *excluding* vertical tab and form feed).
+                switch char {
+                case 0x0A, 0x85, 0x2028, 0x2029:
+                    starts.append(absolute + 1)
+                case 0x0D:
+                    starts.append(absolute + 1)
+                    previousWasCR = true
+                default:
+                    break
+                }
+            }
+            offset += chunkLength
+        }
+
+        lineStartsCache = starts
+        lineStartsCacheLength = length
+        return starts
+    }
+
+    /// Index of the line containing `location`: the last start ≤ location.
+    private func lineIndex(containing location: Int, in starts: [Int]) -> Int {
+        var lo = 0
+        var hi = starts.count - 1
+        while lo < hi {
+            let mid = (lo + hi + 1) / 2
+            if starts[mid] <= location { lo = mid } else { hi = mid - 1 }
+        }
+        return lo
     }
 }

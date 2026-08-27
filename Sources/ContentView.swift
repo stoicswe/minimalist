@@ -366,6 +366,11 @@ private struct EditorContainer: View {
                     if showMinimap && doc.kind == .text {
                         Divider()
                         MinimapView(document: doc, bridge: minimapBridge)
+                            // Fresh identity per document — the minimap
+                            // debounces rebuilds while typing, and a tab
+                            // switch must not show the previous file's
+                            // bars during that debounce window.
+                            .id("minimap-\(doc.id)")
                             .frame(width: 96)
                             .background(Color.primary.opacity(0.02))
                     }

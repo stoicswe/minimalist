@@ -94,6 +94,7 @@ struct EditorView: NSViewRepresentable {
             let selected = textView.selectedRanges
             textView.string = document.text
             textView.selectedRanges = selected
+            coord.applyBaseAttributes()
             coord.applyHighlight()
         } else if previousLanguage != document.language {
             coord.applyHighlight()
@@ -144,12 +145,13 @@ struct EditorView: NSViewRepresentable {
         weak var scrollView: NSScrollView?
         var lastAppliedLanguage: String = ""
 
-        private var highlightr: Highlightr?
-        private var currentTheme: String = ""
         private var highlightWork: DispatchWorkItem?
         private var draftSnapshotWork: DispatchWorkItem?
         private var autosaveRecordWork: DispatchWorkItem?
-        private var isApplyingHighlight = false
+        /// Monotonic counter identifying the most recent highlight request.
+        /// A finished background job only applies its result when it's
+        /// still the newest one.
+        private var highlightGeneration = 0
         private var prefsObserver: NSObjectProtocol?
         private var appearanceObserver: NSObjectProtocol?
         private weak var minimapBridge: MinimapBridge?
@@ -170,23 +172,27 @@ struct EditorView: NSViewRepresentable {
 
         init(document: Document) {
             self.document = document
-            let initialTheme = Self.preferredTheme()
-            let hl = Highlightr()
-            hl?.setTheme(to: initialTheme)
-            self.highlightr = hl
-            self.currentTheme = initialTheme
         }
 
-        /// Rebuild the Highlightr instance with the desired theme. We re-
-        /// create it (rather than just calling `setTheme(to:)`) because the
-        /// fast-render path caches per-token style state and can serve stale
-        /// colors when the theme changes on an existing instance.
-        private func rebuildHighlighter(theme: String) {
-            let hl = Highlightr()
-            hl?.setTheme(to: theme)
-            self.highlightr = hl
-            self.currentTheme = theme
-        }
+        /// Serial queue owning the editors' shared Highlightr instance.
+        /// Creating a Highlightr spins up a JavaScriptCore context and
+        /// loads highlight.js, and running it over a whole document takes
+        /// tens to hundreds of milliseconds on large files — all of which
+        /// used to happen on the main thread. Every editor tab shares one
+        /// instance, serialized on this queue.
+        private static let highlightQueue = DispatchQueue(
+            label: "com.stoicswe.minimalist.editor-highlight",
+            qos: .userInitiated
+        )
+        // Confined to `highlightQueue`.
+        private static var sharedHighlightr: Highlightr?
+        private static var sharedTheme = ""
+
+        /// Above this size (UTF-16 units), skip syntax highlighting and
+        /// show plain text — running the JS highlighter over multi-
+        /// megabyte sources costs seconds per pass, and the editor stays
+        /// fully usable without colors.
+        private static let highlightCeiling = 4_000_000
 
         deinit {
             if let prefsObserver { NotificationCenter.default.removeObserver(prefsObserver) }
@@ -263,7 +269,6 @@ struct EditorView: NSViewRepresentable {
             ) { [weak self] _ in
                 guard let self else { return }
                 Task { @MainActor in
-                    self.refreshTheme()
                     self.applyFontPreferences()
                     self.applyLineNumberPreference()
                     self.applyWordWrapPreference()
@@ -280,17 +285,9 @@ struct EditorView: NSViewRepresentable {
             ) { [weak self] _ in
                 guard let self else { return }
                 Task { @MainActor in
-                    self.refreshTheme()
                     self.applyHighlight()
                 }
             }
-        }
-
-        @MainActor
-        private func refreshTheme() {
-            let target = Self.preferredTheme()
-            guard target != currentTheme else { return }
-            rebuildHighlighter(theme: target)
         }
 
         private static func preferredTheme() -> String {
@@ -318,6 +315,37 @@ struct EditorView: NSViewRepresentable {
         func applyFontPreferences() {
             guard let tv = textView else { return }
             tv.font = Preferences.editorFont
+            applyBaseAttributes()
+        }
+
+        /// Stamp the whole storage (and the typing attributes) with the
+        /// editor font and default text color. Syntax colors are layered
+        /// on top as *temporary* layout-manager attributes, so this is the
+        /// only place that writes display attributes into the storage —
+        /// called on document load, external text replacement, and font
+        /// preference changes, never per keystroke.
+        @MainActor
+        func applyBaseAttributes() {
+            guard let tv = textView, let storage = tv.textStorage else { return }
+            let font = Preferences.editorFont
+            let base: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.textColor,
+            ]
+            tv.typingAttributes = base
+
+            // Preserve an active ghost suggestion's marker + dimmed color
+            // across the wholesale re-stamp.
+            let ghostRange = currentGhostRange(in: storage)
+
+            let full = NSRange(location: 0, length: storage.length)
+            storage.beginEditing()
+            storage.setAttributes(base, range: full)
+            if let ghostRange {
+                storage.addAttribute(Self.ghostAttribute, value: true, range: ghostRange)
+                storage.addAttribute(.foregroundColor, value: NSColor.tertiaryLabelColor, range: ghostRange)
+            }
+            storage.endEditing()
         }
 
         /// Toggle word wrap. When wrap is off, the text container grows
@@ -414,7 +442,7 @@ struct EditorView: NSViewRepresentable {
         // MARK: - Editing
 
         func textDidChange(_ notification: Notification) {
-            guard !isApplyingHighlight, !isMutatingGhost, let tv = textView else { return }
+            guard !isMutatingGhost, let tv = textView else { return }
             // The user typed (or paste/etc.). Drop any active ghost suggestion
             // so the document we feed the highlighter doesn't include it,
             // then schedule a fresh suggestion after a short pause.
@@ -535,7 +563,7 @@ struct EditorView: NSViewRepresentable {
 
             storage.beginEditing()
             storage.removeAttribute(Self.ghostAttribute, range: range)
-            storage.removeAttribute(.foregroundColor, range: range)
+            storage.addAttribute(.foregroundColor, value: NSColor.textColor, range: range)
             storage.endEditing()
             tv.setSelectedRange(NSRange(location: range.upperBound, length: 0))
             pendingCompletion = nil
@@ -670,50 +698,107 @@ struct EditorView: NSViewRepresentable {
             DispatchQueue.main.asyncAfter(deadline: .now() + 8.0, execute: work)
         }
 
+        /// A single syntax-colored range produced by a background
+        /// highlight pass.
+        private struct HighlightRun {
+            let range: NSRange
+            let color: NSColor
+        }
+
+        /// Kick off a full-document highlight. The expensive part (the
+        /// JS-based highlighter) runs on `highlightQueue`; the result is
+        /// applied on the main thread as *temporary* layout-manager
+        /// attributes. Temporary attributes are display-only — applying
+        /// them never touches the text storage, so no relayout, no undo
+        /// interaction, and no per-keystroke full-document churn.
         @MainActor
         func applyHighlight() {
-            guard let tv = textView, let storage = tv.textStorage else { return }
-            let source = tv.string
+            guard let tv = textView else { return }
             let lang = document.language
-            let font = Preferences.editorFont
+            lastAppliedLanguage = lang
+            highlightGeneration += 1
+            let generation = highlightGeneration
 
-            isApplyingHighlight = true
-            defer { isApplyingHighlight = false }
+            // Immutable copy — the text view's backing store mutates as
+            // the user types while the job runs off the main thread.
+            let source = NSString(string: tv.string) as String
+            guard lang != "plaintext", source.utf16.count <= Self.highlightCeiling else {
+                clearHighlight()
+                return
+            }
+            let theme = Self.preferredTheme()
 
-            let attributed: NSAttributedString = {
-                if let hl = highlightr,
-                   lang != "plaintext",
-                   let result = hl.highlight(source, as: lang, fastRender: true) {
-                    return result
+            Self.highlightQueue.async { [weak self] in
+                let runs = Self.computeHighlightRuns(source: source, language: lang, theme: theme)
+                DispatchQueue.main.async {
+                    guard let self, self.highlightGeneration == generation else { return }
+                    self.applyHighlightRuns(runs, computedFrom: source)
                 }
-                return NSAttributedString(string: source, attributes: [
-                    .font: font,
-                    .foregroundColor: NSColor.textColor,
-                ])
-            }()
+            }
+        }
 
-            let mutable = NSMutableAttributedString(attributedString: attributed)
-            let full = NSRange(location: 0, length: mutable.length)
-            mutable.addAttribute(.font, value: font, range: full)
+        /// Runs on `highlightQueue`.
+        private static func computeHighlightRuns(
+            source: String,
+            language: String,
+            theme: String
+        ) -> [HighlightRun] {
+            if sharedTheme != theme || sharedHighlightr == nil {
+                // Recreate rather than `setTheme(to:)` — the fast-render
+                // path caches per-token style state and can serve stale
+                // colors when the theme changes on an existing instance.
+                let hl = Highlightr()
+                hl?.setTheme(to: theme)
+                sharedHighlightr = hl
+                sharedTheme = theme
+            }
+            guard let hl = sharedHighlightr,
+                  let attributed = hl.highlight(source, as: language, fastRender: true)
+            else { return [] }
 
-            let selected = tv.selectedRanges
-            storage.beginEditing()
-            storage.setAttributedString(mutable)
-            storage.endEditing()
+            var runs: [HighlightRun] = []
+            attributed.enumerateAttribute(
+                .foregroundColor,
+                in: NSRange(location: 0, length: attributed.length),
+                options: []
+            ) { value, range, _ in
+                if let color = value as? NSColor {
+                    runs.append(HighlightRun(range: range, color: color))
+                }
+            }
+            return runs
+        }
 
-            // Re-stamp ghost-text attributes if a suggestion is currently
-            // active — otherwise the highlighter just painted those
-            // characters with regular syntax colors and the user can no
-            // longer tell they were a suggestion.
-            if let pending = pendingCompletion, pending.range.upperBound <= storage.length {
-                storage.beginEditing()
-                storage.addAttribute(Self.ghostAttribute, value: true, range: pending.range)
-                storage.addAttribute(.foregroundColor, value: NSColor.tertiaryLabelColor, range: pending.range)
-                storage.endEditing()
+        @MainActor
+        private func applyHighlightRuns(_ runs: [HighlightRun], computedFrom source: String) {
+            guard let tv = textView, let lm = tv.layoutManager, let storage = tv.textStorage else { return }
+            // The text moved on while we were computing — a fresh pass is
+            // already scheduled, so don't paint stale ranges. Unchanged
+            // strings share storage, making this comparison cheap.
+            guard tv.string == source else { return }
+
+            let full = NSRange(location: 0, length: storage.length)
+            lm.removeTemporaryAttribute(.foregroundColor, forCharacterRange: full)
+            for run in runs where NSMaxRange(run.range) <= storage.length {
+                lm.addTemporaryAttribute(.foregroundColor, value: run.color, forCharacterRange: run.range)
             }
 
-            tv.selectedRanges = selected
-            lastAppliedLanguage = lang
+            // Keep an active ghost suggestion dimmed — its tertiary color
+            // lives in the storage and must show through.
+            if pendingCompletion != nil, let ghost = currentGhostRange(in: storage) {
+                lm.removeTemporaryAttribute(.foregroundColor, forCharacterRange: ghost)
+            }
+        }
+
+        /// Drop all syntax colors (plaintext documents), leaving the base
+        /// storage color in charge.
+        @MainActor
+        private func clearHighlight() {
+            guard let tv = textView, let lm = tv.layoutManager, let storage = tv.textStorage else { return }
+            lm.removeTemporaryAttribute(
+                .foregroundColor,
+                forCharacterRange: NSRange(location: 0, length: storage.length)
+            )
         }
 
         // MARK: - Smart edits

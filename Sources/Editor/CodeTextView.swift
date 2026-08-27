@@ -84,10 +84,40 @@ final class CodeTextView: NSTextView {
         super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
         let newRange = selectedRange()
         if oldRange.location != newRange.location {
-            // Cursor moved — old highlighted line and new highlighted line
-            // both need a redraw.
-            needsDisplay = true
+            // Cursor moved — only the old highlighted line and the new
+            // highlighted line need redrawing, not the whole viewport.
+            invalidateCurrentLineBand(at: oldRange.location)
+            invalidateCurrentLineBand(at: newRange.location)
         }
+    }
+
+    /// Invalidate the full-width band the current-line highlight paints
+    /// for the line containing `charIndex`. Mirrors the geometry used by
+    /// `drawCurrentLineHighlight` so the invalidated region always covers
+    /// the drawn one; falls back to a whole-view redraw when the line's
+    /// rect can't be resolved.
+    private func invalidateCurrentLineBand(at charIndex: Int) {
+        guard let layoutManager, let textContainer else {
+            needsDisplay = true
+            return
+        }
+        let nsString = string as NSString
+        let clamped = min(max(0, charIndex), nsString.length)
+        let lineRange = nsString.lineRange(for: NSRange(location: clamped, length: 0))
+        let glyphRange = layoutManager.glyphRange(forCharacterRange: lineRange, actualCharacterRange: nil)
+        guard glyphRange.length > 0 else {
+            // Empty trailing line — geometry comes from the extra line
+            // fragment; cheaper to be safe than to replicate it exactly.
+            needsDisplay = true
+            return
+        }
+        let lineRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
+        setNeedsDisplay(NSRect(
+            x: bounds.minX,
+            y: lineRect.origin.y + textContainerInset.height - 1,
+            width: bounds.width,
+            height: lineRect.height + 2
+        ))
     }
 
     /// Tab accepts a pending ghost-text completion (Copilot-style). Falls

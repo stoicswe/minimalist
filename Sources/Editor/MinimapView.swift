@@ -88,12 +88,37 @@ private struct MinimapCanvas: View {
 
     @State private var snapshot: MinimapSnapshot = .empty
 
+    /// Everything the snapshot depends on. Comparing an unchanged `text`
+    /// is O(1) — both sides share the same string storage.
+    private struct SnapshotKey: Equatable {
+        let text: String
+        let language: String
+        let theme: String
+        let dark: Bool
+    }
+
     var body: some View {
         Canvas { ctx, size in
             draw(in: ctx, size: size)
         }
-        .task(id: cacheKey) {
-            await rebuild()
+        .task(id: SnapshotKey(text: text, language: language, theme: theme, dark: isDark)) {
+            // Debounce while the user types — every keystroke restarts
+            // this task, and rebuilding the whole snapshot for each
+            // intermediate state is wasted work. First build (empty
+            // snapshot) runs immediately so the minimap doesn't flash in.
+            if snapshot.lineCount > 0 {
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                if Task.isCancelled { return }
+            }
+            let next = await MinimapSnapshot.buildAsync(
+                text: text,
+                language: language,
+                theme: theme,
+                dark: isDark
+            )
+            if !Task.isCancelled {
+                snapshot = next
+            }
         }
     }
 
@@ -104,17 +129,28 @@ private struct MinimapCanvas: View {
 
         let lineHeight = size.height / CGFloat(snapshot.lineCount)
         let charWidth = size.width / CGFloat(snapshot.maxColumn)
-        let barHeight = max(0.5, lineHeight * 0.6)
-        let yPadding = max(0, (lineHeight - barHeight) / 2)
 
-        for bar in snapshot.bars {
-            let rect = CGRect(
-                x: CGFloat(bar.startColumn) * charWidth,
-                y: CGFloat(bar.line) * lineHeight + yPadding,
-                width: CGFloat(bar.length) * charWidth,
-                height: barHeight
-            )
-            ctx.fill(Path(rect), with: .color(bar.color))
+        // When the file has far more lines than the canvas has points,
+        // every bar lands on the same few pixels — draw a strided subset
+        // (~2 bar rows per point of height) instead of overdrawing.
+        let rowStride = max(1, snapshot.lineCount / max(1, Int(size.height) * 2))
+        let barHeight = max(0.5, lineHeight * 0.6 * CGFloat(rowStride))
+        let yPadding = max(0, (lineHeight * CGFloat(rowStride) - barHeight) / 2)
+
+        // One path + one fill per distinct color, instead of one fill per
+        // bar — the number of GPU/CG operations drops from thousands to
+        // roughly the theme's palette size.
+        for group in snapshot.groups {
+            var path = Path()
+            for bar in group.bars where bar.line % rowStride == 0 {
+                path.addRect(CGRect(
+                    x: CGFloat(bar.startColumn) * charWidth,
+                    y: CGFloat(bar.line) * lineHeight + yPadding,
+                    width: max(0.5, CGFloat(bar.length) * charWidth),
+                    height: barHeight
+                ))
+            }
+            ctx.fill(path, with: .color(group.color))
         }
     }
 
@@ -133,22 +169,6 @@ private struct MinimapCanvas: View {
         }
         return saved
     }
-
-    private var cacheKey: String {
-        "\(text.count)-\(language)-\(theme)-\(isDark ? "d" : "l")"
-    }
-
-    @MainActor
-    private func rebuild() async {
-        let captured = (text, language, theme, isDark)
-        let next = MinimapSnapshot.build(
-            text: captured.0,
-            language: captured.1,
-            theme: captured.2,
-            dark: captured.3
-        )
-        snapshot = next
-    }
 }
 
 // MARK: - Snapshot model
@@ -157,100 +177,169 @@ struct MinimapBar {
     let line: Int
     let startColumn: Int
     let length: Int
+}
+
+/// Bars that share a display color, so drawing can batch them into a
+/// single fill.
+struct MinimapBarGroup {
     let color: Color
+    let bars: [MinimapBar]
 }
 
 struct MinimapSnapshot {
-    let bars: [MinimapBar]
+    let groups: [MinimapBarGroup]
     let lineCount: Int
     let maxColumn: Int
 
-    static let empty = MinimapSnapshot(bars: [], lineCount: 0, maxColumn: 0)
+    static let empty = MinimapSnapshot(groups: [], lineCount: 0, maxColumn: 0)
 
-    /// Walk the highlighted attributed string once, grouping consecutive
-    /// non-whitespace characters that share the same foreground color into
-    /// a single bar. Each bar carries its line index, starting column, and
-    /// length (in characters) — sized at draw-time to fit the canvas.
-    static func build(text: String, language: String, theme: String, dark: Bool) -> MinimapSnapshot {
-        let highlightr = Highlightr()
-        highlightr?.setTheme(to: theme)
+    /// Serial queue that owns the minimap's Highlightr instance. Building
+    /// a Highlightr spins up a JavaScriptCore context and loads
+    /// highlight.js — far too expensive to do per keystroke, so the
+    /// instance is cached here and recreated only on theme changes.
+    private static let buildQueue = DispatchQueue(
+        label: "com.stoicswe.minimalist.minimap-highlight",
+        qos: .userInitiated
+    )
+    // Confined to `buildQueue`.
+    private static var cachedHighlightr: Highlightr?
+    private static var cachedTheme = ""
 
-        let attributed: NSAttributedString
-        if language != "plaintext",
-           let attr = highlightr?.highlight(text, as: language, fastRender: true) {
-            attributed = attr
-        } else {
-            attributed = NSAttributedString(string: text, attributes: [
-                .foregroundColor: NSColor.labelColor,
-            ])
+    /// Above this size (UTF-16 units), skip syntax highlighting for the
+    /// minimap and render single-color structural bars — running a JS
+    /// highlighter over megabytes of text costs far more than the colored
+    /// overview is worth.
+    private static let highlightCeiling = 1_000_000
+
+    /// Hard cap on collected bars, as a backstop for pathological input
+    /// (e.g. minified single-line sources with hundreds of thousands of
+    /// tokens).
+    private static let maxBars = 150_000
+
+    /// Build a snapshot off the main thread.
+    static func buildAsync(text: String, language: String, theme: String, dark: Bool) async -> MinimapSnapshot {
+        await withCheckedContinuation { continuation in
+            buildQueue.async {
+                continuation.resume(returning: build(text: text, language: language, theme: theme, dark: dark))
+            }
         }
+    }
 
-        var bars: [MinimapBar] = []
+    /// Walk the highlighted string's color runs, grouping consecutive
+    /// non-whitespace characters that share a foreground color into a
+    /// single bar. Each bar carries its line index, starting column, and
+    /// length (in characters) — sized at draw-time to fit the canvas.
+    ///
+    /// Runs on `buildQueue`.
+    static func build(text: String, language: String, theme: String, dark: Bool) -> MinimapSnapshot {
+        let attributed = highlighted(text: text, language: language, theme: theme)
+
+        let nsText = attributed.string as NSString
+        let length = nsText.length
+        guard length > 0 else { return .empty }
+
+        var barsByColor: [NSColor: [MinimapBar]] = [:]
+        var barCount = 0
         var maxColumn = 0
         var currentLine = 0
         var currentCol = 0
         var barStart: Int? = nil
-        var barColor: NSColor? = nil
+        var barColor: NSColor = .labelColor
         var barLine = 0
 
-        let nsText = attributed.string as NSString
-        let length = nsText.length
-
         func flushBar() {
-            if let start = barStart, let color = barColor, currentCol > start {
-                bars.append(MinimapBar(
+            if let start = barStart, currentCol > start, barCount < maxBars {
+                barsByColor[barColor, default: []].append(MinimapBar(
                     line: barLine,
                     startColumn: start,
-                    length: currentCol - start,
-                    color: Color(nsColor: adjusted(color, dark: dark))
+                    length: currentCol - start
                 ))
+                barCount += 1
             }
             barStart = nil
-            barColor = nil
         }
 
-        for i in 0..<length {
-            let char = nsText.character(at: i)
+        // Enumerate color runs instead of asking for attributes per
+        // character, and copy characters out in chunks instead of one
+        // objc call per character.
+        var buffer = [unichar](repeating: 0, count: 4096)
+        attributed.enumerateAttribute(
+            .foregroundColor,
+            in: NSRange(location: 0, length: length),
+            options: []
+        ) { value, range, _ in
+            let runColor = (value as? NSColor) ?? NSColor.labelColor
+            var offset = range.location
+            let runEnd = NSMaxRange(range)
+            while offset < runEnd {
+                let chunkLength = min(buffer.count, runEnd - offset)
+                nsText.getCharacters(&buffer, range: NSRange(location: offset, length: chunkLength))
+                for i in 0..<chunkLength {
+                    let char = buffer[i]
 
-            // Newline: flush any open bar and advance to next line.
-            if char == 10 {
-                flushBar()
-                maxColumn = max(maxColumn, currentCol)
-                currentLine += 1
-                currentCol = 0
-                continue
-            }
+                    // Newline: flush any open bar and advance a line.
+                    if char == 10 {
+                        flushBar()
+                        maxColumn = max(maxColumn, currentCol)
+                        currentLine += 1
+                        currentCol = 0
+                        continue
+                    }
 
-            // Whitespace: end any current bar so token boundaries appear
-            // as gaps (matches the way Xcode minimap renders indentation).
-            let isWhitespace = char == 32 || char == 9
-            if isWhitespace {
-                flushBar()
-            } else {
-                let attrs = attributed.attributes(at: i, effectiveRange: nil)
-                let color = (attrs[.foregroundColor] as? NSColor) ?? NSColor.labelColor
-                if barStart == nil {
-                    barStart = currentCol
-                    barColor = color
-                    barLine = currentLine
-                } else if barColor != color {
-                    flushBar()
-                    barStart = currentCol
-                    barColor = color
-                    barLine = currentLine
+                    // Whitespace: end any current bar so token boundaries
+                    // appear as gaps (matches Xcode's minimap rendering).
+                    if char == 32 || char == 9 {
+                        flushBar()
+                    } else if barStart == nil {
+                        barStart = currentCol
+                        barColor = runColor
+                        barLine = currentLine
+                    } else if barColor != runColor {
+                        flushBar()
+                        barStart = currentCol
+                        barColor = runColor
+                        barLine = currentLine
+                    }
+                    currentCol += 1
                 }
+                offset += chunkLength
             }
-            currentCol += 1
         }
         flushBar()
         maxColumn = max(maxColumn, currentCol)
 
-        let lineCount = currentLine + 1
+        let groups = barsByColor.map { nsColor, bars in
+            MinimapBarGroup(color: Color(nsColor: adjusted(nsColor, dark: dark)), bars: bars)
+        }
+
         return MinimapSnapshot(
-            bars: bars,
-            lineCount: max(1, lineCount),
+            groups: groups,
+            lineCount: max(1, currentLine + 1),
             maxColumn: max(1, maxColumn)
         )
+    }
+
+    /// Highlight `text` with the cached Highlightr instance, falling back
+    /// to a single-color attributed string for plaintext or oversized
+    /// input. Runs on `buildQueue`.
+    private static func highlighted(text: String, language: String, theme: String) -> NSAttributedString {
+        if language != "plaintext", text.utf16.count <= highlightCeiling {
+            if cachedTheme != theme || cachedHighlightr == nil {
+                // Recreate rather than `setTheme(to:)` — the fast-render
+                // path caches per-token style state and can serve stale
+                // colors when the theme changes on an existing instance.
+                let hl = Highlightr()
+                hl?.setTheme(to: theme)
+                cachedHighlightr = hl
+                cachedTheme = theme
+            }
+            if let attr = cachedHighlightr?.highlight(text, as: language, fastRender: true) {
+                return attr
+            }
+        }
+        return NSAttributedString(string: text, attributes: [
+            .foregroundColor: NSColor.labelColor,
+        ])
     }
 
     /// Tune a syntax-theme color for the minimap. Dark mode darkens the
