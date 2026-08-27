@@ -61,6 +61,11 @@ targets:
         CFBundlePackageType: APPL
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
+        # Required for Mac App Store submissions (ITMS-90242).
+        LSApplicationCategoryType: public.app-category.developer-tools
+        # HTTPS-only networking — standard exempt encryption. Declaring it
+        # here skips the export-compliance question on every upload.
+        ITSAppUsesNonExemptEncryption: false
         LSMinimumSystemVersion: "26.0"
         NSHumanReadableCopyright: ""
         NSPrincipalClass: NSApplication
