@@ -1,4 +1,4 @@
-# {m.txt} (Minimalist)
+# {m.Txt}: Minimal Text Editor (Minimalist)
 The text editor for the rest of us. No AI, no excess, no plugins or agents.
 
 <picture>
