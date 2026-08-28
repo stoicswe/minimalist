@@ -14,16 +14,13 @@ jobs:
     permissions:
       contents: write
     env:
-      SCHEME: Minimalist
-      ARCHIVE_PATH: build/Minimalist.xcarchive
+      SCHEME: m.txt
+      ARCHIVE_PATH: build/m.txt.xcarchive
       EXPORT_DIR: build/export
       NOTARY_PROFILE: minimalist-notary
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Generate app icon
-        run: swift make-icon.swift
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -36,7 +33,7 @@ jobs:
           MARKETING=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
           VERSION="${MARKETING}+${BUILD}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "ASSET_NAME=Minimalist-${VERSION}.zip" >> "$GITHUB_ENV"
+          echo "ASSET_NAME=m.txt-${VERSION}.zip" >> "$GITHUB_ENV"
           echo "Marketing: $MARKETING"
           echo "Build:     $BUILD"
           echo "Version:   $VERSION"
@@ -47,7 +44,7 @@ jobs:
       - name: Archive
         run: |
           xcodebuild \
-            -project Minimalist.xcodeproj \
+            -project m.txt.xcodeproj \
             -scheme "$SCHEME" \
             -configuration Release \
             -destination 'generic/platform=macOS' \
@@ -65,24 +62,24 @@ jobs:
 
       - name: Verify signature
         run: |
-          codesign --verify --deep --strict --verbose=2 "$EXPORT_DIR/Minimalist.app"
-          codesign -dvv "$EXPORT_DIR/Minimalist.app" 2>&1 | grep -E "Authority|TeamIdentifier"
+          codesign --verify --deep --strict --verbose=2 "$EXPORT_DIR/m.txt.app"
+          codesign -dvv "$EXPORT_DIR/m.txt.app" 2>&1 | grep -E "Authority|TeamIdentifier"
 
       - name: Notarize
         run: |
-          ditto -c -k --keepParent "$EXPORT_DIR/Minimalist.app" build/notary.zip
+          ditto -c -k --keepParent "$EXPORT_DIR/m.txt.app" build/notary.zip
           xcrun notarytool submit build/notary.zip \
             --keychain-profile "$NOTARY_PROFILE" \
             --wait
 
       - name: Staple
         run: |
-          xcrun stapler staple "$EXPORT_DIR/Minimalist.app"
-          xcrun stapler validate "$EXPORT_DIR/Minimalist.app"
+          xcrun stapler staple "$EXPORT_DIR/m.txt.app"
+          xcrun stapler validate "$EXPORT_DIR/m.txt.app"
 
       - name: Package release zip
         run: |
-          ditto -c -k --keepParent "$EXPORT_DIR/Minimalist.app" "$ASSET_NAME"
+          ditto -c -k --keepParent "$EXPORT_DIR/m.txt.app" "$ASSET_NAME"
           ls -la "$ASSET_NAME"
 
       - name: Create GitHub Release

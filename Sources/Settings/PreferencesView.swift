@@ -377,7 +377,7 @@ private enum DeveloperProfile {
     static let role = "Developer"
 
     static let blurb = """
-        Minimalist is a passion project — a quiet, distraction-free code and \
+        {m.txt} is a passion project — a quiet, distraction-free code and \
         text editor for the Mac. It grew out of wanting an editor that opens \
         instantly, stays out of the way, and treats your files as plain \
         files: no projects to configure, no lock-in, just you and the text.
@@ -504,7 +504,7 @@ private struct AboutTab: View {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "—"
         let build = info?["CFBundleVersion"] as? String ?? "—"
-        return "Minimalist \(short) (\(build))"
+        return "{m.txt} \(short) (\(build))"
     }
 }
 
@@ -724,7 +724,7 @@ private struct TipJarSection: View {
         case .ready, .loading:
             return "Tips are one-time thank-yous processed by the App Store. They don't unlock anything — every feature is already yours."
         case .unavailable:
-            return "Tips are processed by the App Store and become available when Minimalist is installed from the Mac App Store."
+            return "Tips are processed by the App Store and become available when {m.txt} is installed from the Mac App Store."
         }
     }
 }

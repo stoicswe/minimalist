@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build a signed, notarized, stapled Minimalist.app and publish it as a
+# Build a signed, notarized, stapled m.txt.app and publish it as a
 # GitHub Release.
 #
 # Tag format:
@@ -29,13 +29,13 @@
 #
 set -euo pipefail
 
-SCHEME="Minimalist"
+SCHEME="m.txt"
 CONFIGURATION="Release"
 BUILD_DIR="build"
-ARCHIVE_PATH="$BUILD_DIR/Minimalist.xcarchive"
+ARCHIVE_PATH="$BUILD_DIR/m.txt.xcarchive"
 EXPORT_DIR="$BUILD_DIR/export"
-APP_PATH="$EXPORT_DIR/Minimalist.app"
-ZIP_FOR_NOTARY="$BUILD_DIR/Minimalist-notary.zip"
+APP_PATH="$EXPORT_DIR/m.txt.app"
+ZIP_FOR_NOTARY="$BUILD_DIR/m.txt-notary.zip"
 INFO_PLIST="Resources/Info.plist"
 NOTARY_PROFILE="${NOTARY_PROFILE:-minimalist-notary}"
 
@@ -83,7 +83,7 @@ BUILD_VERSION="${DATESTAMP}.${NEXT_BUILD}"
 MARKETING_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST")
 VERSION="${MARKETING_VERSION}+${BUILD_VERSION}"
 TAG="v$VERSION"
-ASSET_NAME="Minimalist-${VERSION}.zip"
+ASSET_NAME="m.txt-${VERSION}.zip"
 ZIP_FINAL="$BUILD_DIR/$ASSET_NAME"
 
 echo "    Marketing version: $MARKETING_VERSION"
@@ -110,7 +110,7 @@ mkdir -p "$EXPORT_DIR"
 
 log "Archiving $SCHEME ($CONFIGURATION) for macOS"
 xcodebuild \
-    -project Minimalist.xcodeproj \
+    -project m.txt.xcodeproj \
     -scheme "$SCHEME" \
     -configuration "$CONFIGURATION" \
     -destination 'generic/platform=macOS' \

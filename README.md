@@ -46,7 +46,7 @@ Grab the latest signed and notarized `.app` from the [Releases](https://github.c
 git clone https://github.com/stoicswe/minimalist.git
 cd minimalist
 xcodegen generate
-open Minimalist.xcodeproj
+open m.txt.xcodeproj
 ```
 
 ## License

@@ -534,7 +534,7 @@ private struct WatermarkBackground: View {
 private struct EmptyState: View {
     var body: some View {
         VStack(spacing: 18) {
-            Text("Minimalist")
+            Text("{m.txt}")
                 .font(.system(size: 36, weight: .light, design: .serif))
                 .foregroundStyle(.secondary)
             VStack(spacing: 6) {

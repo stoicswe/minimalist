@@ -22,7 +22,7 @@ struct MinimalistApp: App {
         // first window opens with `nil` value and is treated as `.primary`
         // (restores last folder + open files); ⌘⇧N and "Open in New Window"
         // open additional windows with explicit launch values.
-        WindowGroup("Minimalist", id: "main", for: WindowLaunch.self) { $launch in
+        WindowGroup("{m.txt}", id: "main", for: WindowLaunch.self) { $launch in
             WorkspaceWindow(launch: launch ?? .primary, appDelegate: appDelegate)
                 .environment(\.font, currentUIFont)
                 .preferredColorScheme(resolvedColorScheme)
@@ -32,7 +32,7 @@ struct MinimalistApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .appInfo) {
-                Button("About Minimalist") { showAboutPanel() }
+                Button("About {m.txt}") { showAboutPanel() }
             }
             CommandGroup(replacing: .newItem) {
                 NewItemCommands()
@@ -83,10 +83,11 @@ struct MinimalistApp: App {
                 .foregroundColor: NSColor.secondaryLabelColor,
             ]
         )
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationIcon: icon,
-            .applicationName: "Minimalist",
-            .applicationVersion: "0.1.0",
+            .applicationName: "{m.txt}",
+            .applicationVersion: version,
             .credits: credits,
         ])
     }

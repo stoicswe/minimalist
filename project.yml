@@ -1,4 +1,4 @@
-name: Minimalist
+name: m.txt
 options:
   bundleIdPrefix: com.stoicswe
   deploymentTarget:
@@ -36,7 +36,7 @@ packages:
     exactVersion: 1.9.2
 
 targets:
-  Minimalist:
+  m.txt:
     type: application
     platform: macOS
     deploymentTarget: "26.0"
@@ -54,12 +54,12 @@ targets:
     info:
       path: Resources/Info.plist
       properties:
-        CFBundleName: Minimalist
-        CFBundleDisplayName: Minimalist
+        CFBundleName: m.txt
+        CFBundleDisplayName: "{m.txt}"
         CFBundleExecutable: $(EXECUTABLE_NAME)
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundlePackageType: APPL
-        CFBundleShortVersionString: "0.1.0"
+        CFBundleShortVersionString: "1.0.1"
         CFBundleVersion: "1"
         # Required for Mac App Store submissions (ITMS-90242).
         LSApplicationCategoryType: public.app-category.developer-tools
@@ -183,7 +183,7 @@ targets:
             LSItemContentTypes:
               - public.audio
     entitlements:
-      path: Resources/Minimalist.entitlements
+      path: Resources/m.txt.entitlements
       properties:
         # App Sandbox — required for TestFlight / Mac App Store builds.
         com.apple.security.app-sandbox: true
@@ -200,7 +200,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.stoicswe.minimalist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CODE_SIGN_ENTITLEMENTS: Resources/Minimalist.entitlements
+        CODE_SIGN_ENTITLEMENTS: Resources/m.txt.entitlements
         COMBINE_HIDPI_IMAGES: YES
     dependencies:
       - package: Highlightr
@@ -208,10 +208,10 @@ targets:
       - package: libgit2
 
 schemes:
-  Minimalist:
+  m.txt:
     build:
       targets:
-        Minimalist: all
+        m.txt: all
     run:
       config: Debug
       # Local tip-jar testing: Run uses the test products in
