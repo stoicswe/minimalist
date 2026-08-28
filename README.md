@@ -1,4 +1,5 @@
-# Minimalist
+# {m.txt} (Minimalist)
+The text editor for the rest of us. No AI, no excess, no plugins or agents.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dark_mode.png">
@@ -6,7 +7,10 @@
   <img alt="Minimalist editor" src="docs/screenshots/light_mode.png">
 </picture>
 
-A minimalist text editor for macOS. SwiftUI on top, native AppKit underneath — no chrome you don't ask for, no setting you can't reach.
+<a href="https://apps.apple.com/us/app/m-txt-minimal-text-editor/id6764609511?mt=12&itscg=30200&itsct=apps_box_badge&mttnsubad=6764609511" style="display: inline-block;"> <img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us?releaseDate=1787875200" alt="Download on the App Store" style="width: 244px; height: 82px; vertical-align: middle; object-fit: contain;" /></a>
+    
+
+A minimalist text editor for macOS. SwiftUI on top and native AppKit running in the background for a simple user interface.
 
 ## Features
 
@@ -43,34 +47,5 @@ xcodegen generate
 open Minimalist.xcodeproj
 ```
 
-To produce a Developer ID–signed, notarized, stapled distribution zip locally:
-
-```sh
-./make-release.sh
-```
-
-See the comments at the top of [make-release.sh](make-release.sh) for one-time notarization setup.
-
-## Project layout
-
-```
-Sources/
-  MinimalistApp.swift         App entry point
-  ContentView.swift           Root window content
-  Editor/                     Text editor (NSViewRepresentable bridge to NSTextView)
-  Sidebar/                    File tree
-  TopBar/                     Tabs and titlebar
-  Workspace/                  Folder/session state
-  Git/                        Branch and revision integration
-  Settings/                   Preferences UI
-  Brand/                      Theming, accent colors, glass effects
-  Util/
-Resources/
-  Assets.xcassets             App icon and assets
-  Info.plist
-  Minimalist.entitlements
-```
-
 ## License
-
 [MIT](LICENSE) © Nathaniel Knudsen
