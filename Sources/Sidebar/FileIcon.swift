@@ -135,7 +135,7 @@ private struct FileBadge: View {
     }
 }
 
-private struct FolderShape: Shape {
+private nonisolated struct FolderShape: Shape {
     let open: Bool
     func path(in rect: CGRect) -> Path {
         var p = Path()

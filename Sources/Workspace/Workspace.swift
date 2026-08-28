@@ -5,8 +5,8 @@ import MinimalistCore
 @MainActor
 final class Workspace: ObservableObject {
     @Published var rootNode: FileNode?
-    @Published var openDocuments: [Document] = []
-    @Published var activeDocumentID: Document.ID?
+    @Published var openDocuments: [MinimalistCore.Document] = []
+    @Published var activeDocumentID: MinimalistCore.Document.ID?
     /// File URLs the user has touched recently — most recent first. Used
     /// by the Zen-mode search palette to surface "recently edited" files
     /// when the query is empty. Persisted across launches.
@@ -57,7 +57,7 @@ final class Workspace: ObservableObject {
         bookmarkedFolderURL?.stopAccessingSecurityScopedResource()
     }
 
-    var activeDocument: Document? {
+    var activeDocument: MinimalistCore.Document? {
         openDocuments.first { $0.id == activeDocumentID }
     }
 
@@ -191,7 +191,7 @@ final class Workspace: ObservableObject {
     }
 
     /// Pin a document so it stops being a preview / replaceable tab.
-    func pin(_ document: Document) {
+    func pin(_ document: MinimalistCore.Document) {
         guard document.isPreview else { return }
         document.isPreview = false
         persistOpenFiles()
@@ -268,7 +268,7 @@ final class Workspace: ObservableObject {
     }
 
     /// Close the document, prompting if there are unsaved changes.
-    func requestClose(_ document: Document) {
+    func requestClose(_ document: MinimalistCore.Document) {
         if document.isDirty {
             let response = runUnsavedChangesAlert(for: document)
             switch response {
@@ -284,7 +284,7 @@ final class Workspace: ObservableObject {
         }
     }
 
-    private func closeImmediately(_ document: Document) {
+    private func closeImmediately(_ document: MinimalistCore.Document) {
         document.discardTempBacking()
         guard let idx = openDocuments.firstIndex(where: { $0.id == document.id }) else { return }
         openDocuments.remove(at: idx)
@@ -327,7 +327,7 @@ final class Workspace: ObservableObject {
         persistOpenFiles()
     }
 
-    private func runUnsavedChangesAlert(for document: Document) -> NSApplication.ModalResponse {
+    private func runUnsavedChangesAlert(for document: MinimalistCore.Document) -> NSApplication.ModalResponse {
         let alert = NSAlert()
         alert.messageText = "Save changes to “\(document.displayName)”?"
         alert.informativeText = "Your changes will be lost if you don't save them."
@@ -346,7 +346,7 @@ final class Workspace: ObservableObject {
     /// Save the document. Untitled documents prompt for a destination.
     /// Returns true on success, false on cancel or failure.
     @discardableResult
-    func saveOrSaveAs(_ document: Document) -> Bool {
+    func saveOrSaveAs(_ document: MinimalistCore.Document) -> Bool {
         if document.isUntitled {
             return saveAs(document)
         }
@@ -369,7 +369,7 @@ final class Workspace: ObservableObject {
     /// and best-effort — caller is responsible for debouncing the call.
     /// Skipped for non-text kinds (PDFs, images, video, binary) — those
     /// viewers are read-only and have no text to track.
-    func recordAutosave(for document: Document) {
+    func recordAutosave(for document: MinimalistCore.Document) {
         guard document.kind == .text,
               !document.isUntitled,
               let tracker = revisionTracker else { return }
@@ -434,7 +434,7 @@ final class Workspace: ObservableObject {
     /// Created while the files are still accessible (they're open), so a
     /// sandboxed relaunch can regain access even for files outside the
     /// workspace folder's scope.
-    private static func fileBookmarks(for docs: [Document]) -> [String: Data] {
+    private static func fileBookmarks(for docs: [MinimalistCore.Document]) -> [String: Data] {
         var bookmarks: [String: Data] = [:]
         for doc in docs {
             if let data = try? doc.url.bookmarkData(
@@ -519,7 +519,7 @@ final class Workspace: ObservableObject {
     }
 
     @discardableResult
-    private func saveAs(_ document: Document) -> Bool {
+    private func saveAs(_ document: MinimalistCore.Document) -> Bool {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = document.displayName
         panel.canCreateDirectories = true
@@ -537,11 +537,11 @@ final class Workspace: ObservableObject {
     }
 
     // Backwards-compatible alias used elsewhere in the UI.
-    func close(_ document: Document) { requestClose(document) }
+    func close(_ document: MinimalistCore.Document) { requestClose(document) }
 
     // MARK: - Activate
 
-    func activate(_ document: Document) {
+    func activate(_ document: MinimalistCore.Document) {
         activeDocumentID = document.id
         if shouldPersist {
             // Only persist the active path for tabs that themselves get

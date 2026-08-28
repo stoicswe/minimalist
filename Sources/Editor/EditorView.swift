@@ -4,7 +4,7 @@ import Highlightr
 import MinimalistCore
 
 struct EditorView: NSViewRepresentable {
-    var document: Document
+    var document: MinimalistCore.Document
     var workspace: Workspace?
     var minimapBridge: MinimapBridge?
     /// When true, the editor's vertical scroller is hidden. Used when the
@@ -140,7 +140,7 @@ struct EditorView: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
-        var document: Document
+        var document: MinimalistCore.Document
         weak var workspace: Workspace?
         weak var textView: NSTextView?
         weak var scrollView: NSScrollView?
@@ -170,7 +170,7 @@ struct EditorView: NSViewRepresentable {
         private var isMutatingGhost = false
         private var completionWork: DispatchWorkItem?
 
-        init(document: Document) {
+        init(document: MinimalistCore.Document) {
             self.document = document
         }
 

@@ -26,7 +26,7 @@ struct StatusPill: View {
 /// Original status pill — language + indent + line endings, with a
 /// popover for editing the document's formatting in place.
 private struct TextStatusPill: View {
-    var document: Document
+    var document: MinimalistCore.Document
     @AppStorage(PreferenceKeys.windowGlass) private var windowGlass: Bool = false
     @State private var showOptions = false
 
@@ -295,7 +295,7 @@ private struct PillTextStyle: ViewModifier {
 }
 
 private struct FormatOptionsView: View {
-    @Bindable var document: Document
+    @Bindable var document: MinimalistCore.Document
 
     @AppStorage("default.indent.kind") private var defaultKind: String = Indentation.Kind.spaces.rawValue
     @AppStorage("default.indent.width") private var defaultWidth: Int = 4
