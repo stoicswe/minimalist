@@ -246,7 +246,9 @@ private struct ImageScrollHost: NSViewRepresentable {
         var lastURL: URL?
         private var magnifyObserver: NSObjectProtocol?
 
-        deinit {
+        // Isolated so the main-actor-guarded observer token is legal to
+        // touch; the runtime schedules this deinit onto the main actor.
+        isolated deinit {
             if let observer = magnifyObserver {
                 NotificationCenter.default.removeObserver(observer)
             }

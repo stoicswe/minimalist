@@ -1,28 +1,30 @@
 import Foundation
+import Observation
 
 @MainActor
-final class FileNode: Identifiable, ObservableObject {
-    let id = UUID()
-    let url: URL
-    let isDirectory: Bool
-    @Published var children: [FileNode]?
+@Observable
+public final class FileNode: Identifiable {
+    public let id = UUID()
+    public let url: URL
+    public let isDirectory: Bool
+    public var children: [FileNode]?
 
-    init(url: URL, isDirectory: Bool) {
+    public init(url: URL, isDirectory: Bool) {
         self.url = url
         self.isDirectory = isDirectory
     }
 
-    var name: String { url.lastPathComponent }
+    public var name: String { url.lastPathComponent }
 
     /// Force-reload this node's children from disk. Used after file
     /// operations (new / rename / duplicate / paste) so the sidebar
     /// reflects the change.
-    func reloadChildren() {
+    public func reloadChildren() {
         children = nil
         loadChildrenIfNeeded()
     }
 
-    func loadChildrenIfNeeded() {
+    public func loadChildrenIfNeeded() {
         guard isDirectory, children == nil else { return }
         let urls: [URL]
         do {

@@ -4,13 +4,17 @@ import Foundation
 /// libgit2 (`GitClient`) — App Sandbox forbids spawning `/usr/bin/git`.
 /// All calls are synchronous and meant to be invoked off the main thread
 /// (see `GitState`).
-struct GitService: Sendable {
-    let workingDirectory: URL
+public struct GitService: Sendable {
+    public let workingDirectory: URL
 
-    enum GitError: Error, LocalizedError {
+    public init(workingDirectory: URL) {
+        self.workingDirectory = workingDirectory
+    }
+
+    public enum GitError: Error, LocalizedError {
         case notAGitRepo
         case commandFailed(String)
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .notAGitRepo: return "This folder is not a git repository."
             case .commandFailed(let message): return message
@@ -20,19 +24,19 @@ struct GitService: Sendable {
 
     /// Returns the current branch name, or a short SHA when HEAD is detached,
     /// or nil if the folder isn't a git repo.
-    func currentBranch() -> String? {
+    public func currentBranch() -> String? {
         GitClient.open(containing: workingDirectory)?.currentBranch()
     }
 
-    func localBranches() -> [String] {
+    public func localBranches() -> [String] {
         GitClient.open(containing: workingDirectory)?.localBranches() ?? []
     }
 
-    func isGitRepo() -> Bool {
+    public func isGitRepo() -> Bool {
         GitClient.open(containing: workingDirectory) != nil
     }
 
-    func checkout(_ branch: String) throws {
+    public func checkout(_ branch: String) throws {
         guard let client = GitClient.open(containing: workingDirectory) else {
             throw GitError.notAGitRepo
         }
@@ -43,7 +47,7 @@ struct GitService: Sendable {
         }
     }
 
-    func createBranch(_ name: String) throws {
+    public func createBranch(_ name: String) throws {
         guard let client = GitClient.open(containing: workingDirectory) else {
             throw GitError.notAGitRepo
         }

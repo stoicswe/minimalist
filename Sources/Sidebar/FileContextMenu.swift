@@ -1,4 +1,5 @@
 import SwiftUI
+import MinimalistCore
 
 /// Right-click menu items shared by the sidebar's directory and file rows.
 /// Wired through closures so the same menu structure can act on either a

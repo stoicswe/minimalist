@@ -1,6 +1,6 @@
 import Foundation
 
-enum LanguageDetector {
+public enum LanguageDetector {
     private static let extensionMap: [String: String] = [
         "swift": "swift",
         "js": "javascript", "mjs": "javascript", "cjs": "javascript", "jsx": "javascript",
@@ -50,7 +50,7 @@ enum LanguageDetector {
         ".env": "bash",
     ]
 
-    static func language(for url: URL) -> String {
+    public static func language(for url: URL) -> String {
         let lowerName = url.lastPathComponent.lowercased()
         if let lang = nameMap[lowerName] { return lang }
         let ext = url.pathExtension.lowercased()

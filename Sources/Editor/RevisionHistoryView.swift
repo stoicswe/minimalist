@@ -1,4 +1,5 @@
 import SwiftUI
+import MinimalistCore
 
 /// Sheet view listing every entry in `RevisionTracker`'s autosave +
 /// `.minimal` git history for a file. Selecting an entry shows a

@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import MinimalistCore
 
 struct ContentView: View {
     @EnvironmentObject var workspace: Workspace
@@ -513,7 +514,9 @@ private struct EditorContainer: View {
 
 /// NSItemProvider hands fileURL items back as Data, NSURL, or URL
 /// depending on the source. Normalize to URL.
-private func resolveDroppedFileURL(from item: Any?) -> URL? {
+// Called from `NSItemProvider.loadItem` completion handlers, which run
+// off the main thread — hence `nonisolated` despite the MainActor default.
+nonisolated private func resolveDroppedFileURL(from item: Any?) -> URL? {
     if let url = item as? URL { return url }
     if let url = item as? NSURL { return url as URL }
     if let data = item as? Data {
@@ -609,7 +612,7 @@ private struct TabBar: View {
 
 private struct TabButton: View {
     @EnvironmentObject var workspace: Workspace
-    @ObservedObject var document: Document
+    var document: Document
     @State private var hovering = false
     @State private var historyContext: HistoryContext?
 

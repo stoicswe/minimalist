@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import MinimalistCore
 
 struct FileTreeView: View {
     @EnvironmentObject var workspace: Workspace
@@ -151,7 +152,7 @@ private struct EmptySidebar: View {
 
 private struct FolderRowList: View {
     @EnvironmentObject var workspace: Workspace
-    @ObservedObject var node: FileNode
+    var node: FileNode
     let depth: Int
     let expandedByDefault: Bool
     @Binding var historyContext: HistoryContext?
@@ -326,7 +327,9 @@ private func findNode(matching url: URL, under node: FileNode?) -> FileNode? {
 
 /// NSItemProvider hands fileURL items back as Data, NSURL, or URL
 /// depending on the source. Normalize to URL.
-private func resolveDroppedURL(from item: Any?) -> URL? {
+// Called from `NSItemProvider.loadItem` completion handlers, which run
+// off the main thread — hence `nonisolated` despite the MainActor default.
+nonisolated private func resolveDroppedURL(from item: Any?) -> URL? {
     if let url = item as? URL { return url }
     if let url = item as? NSURL { return url as URL }
     if let data = item as? Data {
@@ -336,7 +339,7 @@ private func resolveDroppedURL(from item: Any?) -> URL? {
 }
 
 private struct DirectoryRow: View {
-    @ObservedObject var node: FileNode
+    var node: FileNode
     /// Name shown for the row — the folder's own name, or the dotted
     /// `parent.child` path when the row represents a compacted chain.
     let displayName: String
@@ -452,7 +455,7 @@ private struct OpenFileRow: View {
 
 private struct FileRow: View {
     @EnvironmentObject var workspace: Workspace
-    @ObservedObject var node: FileNode
+    var node: FileNode
     let depth: Int
     @Binding var historyContext: HistoryContext?
     @Binding var rightClickedURL: URL?
@@ -556,7 +559,8 @@ private struct RightClickReporter: NSViewRepresentable {
             }
         }
 
-        deinit { removeMonitor() }
+        // Isolated so the main-actor-guarded monitor is legal to touch.
+        isolated deinit { removeMonitor() }
 
         private func removeMonitor() {
             if let m = monitor {

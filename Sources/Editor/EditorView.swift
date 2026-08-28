@@ -1,9 +1,10 @@
 import SwiftUI
 import AppKit
 import Highlightr
+import MinimalistCore
 
 struct EditorView: NSViewRepresentable {
-    @ObservedObject var document: Document
+    var document: Document
     var workspace: Workspace?
     var minimapBridge: MinimapBridge?
     /// When true, the editor's vertical scroller is hidden. Used when the
@@ -183,9 +184,10 @@ struct EditorView: NSViewRepresentable {
             label: "com.stoicswe.minimalist.editor-highlight",
             qos: .userInitiated
         )
-        // Confined to `highlightQueue`.
-        private static var sharedHighlightr: Highlightr?
-        private static var sharedTheme = ""
+        // Confined to `highlightQueue`, which is what makes the unsafe
+        // opt-out sound — nothing else may touch these.
+        nonisolated(unsafe) private static var sharedHighlightr: Highlightr?
+        nonisolated(unsafe) private static var sharedTheme = ""
 
         /// Above this size (UTF-16 units), skip syntax highlighting and
         /// show plain text — running the JS highlighter over multi-
@@ -193,7 +195,9 @@ struct EditorView: NSViewRepresentable {
         /// fully usable without colors.
         private static let highlightCeiling = 4_000_000
 
-        deinit {
+        // Isolated so the main-actor-guarded observer tokens are legal to
+        // touch; the runtime schedules this deinit onto the main actor.
+        isolated deinit {
             if let prefsObserver { NotificationCenter.default.removeObserver(prefsObserver) }
             if let appearanceObserver { NotificationCenter.default.removeObserver(appearanceObserver) }
             NotificationCenter.default.removeObserver(
@@ -708,7 +712,7 @@ struct EditorView: NSViewRepresentable {
 
         /// A single syntax-colored range produced by a background
         /// highlight pass.
-        private struct HighlightRun {
+        nonisolated private struct HighlightRun {
             let range: NSRange
             let color: NSColor
         }
@@ -749,8 +753,9 @@ struct EditorView: NSViewRepresentable {
             }
         }
 
-        /// Runs on `highlightQueue`.
-        private static func computeHighlightRuns(
+        /// Runs on `highlightQueue` — hence `nonisolated` despite the
+        /// app's MainActor default.
+        nonisolated private static func computeHighlightRuns(
             source: String,
             language: String,
             theme: String

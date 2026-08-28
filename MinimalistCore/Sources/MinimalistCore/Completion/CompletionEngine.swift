@@ -10,7 +10,7 @@ import Foundation
 /// This is intentionally simple — no fuzzy matching, no LLM. The point is
 /// to make finishing repetitive identifiers and keywords cheap, not to
 /// rival a language server.
-enum CompletionEngine {
+public enum CompletionEngine {
     /// Find the best completion for `prefix` given the surrounding
     /// document text and language. Returns the *suffix* to append (i.e.
     /// the part the user hasn't typed yet), or nil when nothing useful
@@ -20,7 +20,7 @@ enum CompletionEngine {
     ///   keywords are folded into the candidate pool alongside document
     ///   identifiers. When false, only identifiers from the file are
     ///   considered.
-    static func suggest(
+    public static func suggest(
         prefix: String,
         in text: String,
         language: String,

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import MinimalistCore
 
 @MainActor
 final class Workspace: ObservableObject {
