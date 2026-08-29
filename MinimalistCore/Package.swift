@@ -27,6 +27,10 @@ let package = Package(
             dependencies: [
                 .product(name: "libgit2", package: "libgit2")
             ]
+        ),
+        .testTarget(
+            name: "MinimalistCoreTests",
+            dependencies: ["MinimalistCore"]
         )
     ],
     swiftLanguageModes: [.v6]

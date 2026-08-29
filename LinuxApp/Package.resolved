@@ -1,0 +1,78 @@
+{
+  "originHash" : "3c98a7f26cd0fd7c0a579fca55e2cd67e4eab185267f00d6fc974e07513371c1",
+  "pins" : [
+    {
+      "identity" : "adwaita-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://git.aparoksha.dev/aparoksha/adwaita-swift",
+      "state" : {
+        "branch" : "main",
+        "revision" : "476f9e36d34239aed78ce141b8af435d8825c859"
+      }
+    },
+    {
+      "identity" : "codeeditor",
+      "kind" : "remoteSourceControl",
+      "location" : "https://git.aparoksha.dev/aparoksha/codeeditor",
+      "state" : {
+        "branch" : "main",
+        "revision" : "ffbe8300f36c12672aae99e3525e57747375407f"
+      }
+    },
+    {
+      "identity" : "csqlite",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/stephencelis/CSQLite",
+      "state" : {
+        "revision" : "8ad83035460a3d1029a2c5a0cca4f980297a9ca2",
+        "version" : "3.53.3"
+      }
+    },
+    {
+      "identity" : "levenshtein-transformations",
+      "kind" : "remoteSourceControl",
+      "location" : "https://git.aparoksha.dev/aparoksha/levenshtein-transformations",
+      "state" : {
+        "branch" : "main",
+        "revision" : "06577a2c4c6419ed859e34a8fb7be87a3b8975da"
+      }
+    },
+    {
+      "identity" : "libgit2",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ibrahimcetin/libgit2.git",
+      "state" : {
+        "revision" : "52287b0914f300f916b58fec80e13d8dd8f6824f",
+        "version" : "1.9.2"
+      }
+    },
+    {
+      "identity" : "meta",
+      "kind" : "remoteSourceControl",
+      "location" : "https://git.aparoksha.dev/aparoksha/meta",
+      "state" : {
+        "branch" : "main",
+        "revision" : "394b376ac691fb3fd3a62f30066dccbe3fad2786"
+      }
+    },
+    {
+      "identity" : "meta-sqlite",
+      "kind" : "remoteSourceControl",
+      "location" : "https://git.aparoksha.dev/aparoksha/meta-sqlite",
+      "state" : {
+        "branch" : "main",
+        "revision" : "56bc247d90a381eed65e0adf37ff36b5a6d674d8"
+      }
+    },
+    {
+      "identity" : "sqlite.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/stephencelis/SQLite.swift",
+      "state" : {
+        "revision" : "964c300fb0736699ce945c9edb56ecd62eba27a3",
+        "version" : "0.16.0"
+      }
+    }
+  ],
+  "version" : 3
+}

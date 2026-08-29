@@ -1,0 +1,105 @@
+# Snap package for the Linux app (LinuxApp/ + MinimalistCore/).
+#
+# Base is core26 (Ubuntu 26.04 LTS) because the UI toolkit needs
+# libadwaita >= 1.7 — core24's 1.5 is too old.
+#
+# TODO: switch to `extensions: [gnome]` once the gnome extension
+# supports core26 (https://github.com/canonical/snapcraft/issues/6185).
+# That replaces the hand-staged GTK stack, the launcher script's env
+# plumbing, and most of the interface plugs below with the shared GNOME
+# platform snap — smaller snap, better theming.
+name: m-txt
+base: core26
+adopt-info: minimalist
+summary: "{m.txt} — the text editor for the rest of us"
+description: |
+  A minimalist text editor. No AI, no excess, no plugins or agents.
+
+  Syntax highlighting, multi-tab editing, a file-tree sidebar, and git
+  branch awareness — sharing its document engine with the macOS app.
+license: MIT
+grade: stable
+confinement: strict
+
+platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
+  arm64:
+    build-on: [arm64]
+    build-for: [arm64]
+
+apps:
+  m-txt:
+    command: usr/bin/minimalist-launch
+    desktop: meta/gui/m-txt.desktop
+    plugs:
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+      - opengl
+      - gsettings
+      - home
+      - removable-media
+      - network
+
+parts:
+  minimalist:
+    plugin: nil
+    source: .
+    build-packages:
+      - binutils
+      - build-essential
+      - ca-certificates
+      - curl
+      - git
+      - libcurl4-openssl-dev
+      - libedit2
+      - libglib2.0-bin
+      - libncurses-dev
+      - libsqlite3-0
+      - libxml2-dev
+      - pkg-config
+      - zlib1g-dev
+      - libadwaita-1-dev
+      - libgtksourceview-5-dev
+    stage-packages:
+      - libgtk-4-1
+      - libadwaita-1-0
+      - libgtksourceview-5-0
+      - adwaita-icon-theme
+      - shared-mime-info
+      - libgdk-pixbuf2.0-bin
+      - libssl3t64
+    override-pull: |
+      craftctl default
+      craftctl set version="$(git -C "$CRAFT_PART_SRC" describe --tags --always 2>/dev/null || echo dev)"
+    override-build: |
+      set -eu
+      # swift.org toolchain — Ubuntu's apt swiftlang (6.1) is too old for
+      # the UI toolkit's Swift 6.2 manifests. The 24.04 build runs on
+      # 26.04 with a libxml2 soname shim (26.04 renamed .so.2 -> .so.16).
+      SWIFT_VERSION=6.2.3
+      case "$(uname -m)" in
+          x86_64)  DIR="ubuntu2404";         SUF="" ;;
+          aarch64) DIR="ubuntu2404-aarch64"; SUF="-aarch64" ;;
+          *) echo "unsupported arch" >&2; exit 1 ;;
+      esac
+      if [ ! -d /opt/swift ]; then
+          curl -fsSL "https://download.swift.org/swift-${SWIFT_VERSION}-release/${DIR}/swift-${SWIFT_VERSION}-RELEASE/swift-${SWIFT_VERSION}-RELEASE-ubuntu24.04${SUF}.tar.gz" \
+              | tar xz -C /opt
+          mv /opt/swift-${SWIFT_VERSION}-RELEASE-ubuntu24.04${SUF} /opt/swift
+      fi
+      real=$(ls /usr/lib/*/libxml2.so.* | grep -E 'so\.[0-9]+$' | head -1)
+      [ -e "$(dirname "$real")/libxml2.so.2" ] || ln -s "$real" "$(dirname "$real")/libxml2.so.2"
+      export PATH="/opt/swift/usr/bin:$PATH"
+      swift build --package-path LinuxApp -c release --static-swift-stdlib
+      install -Dm755 LinuxApp/.build/release/Minimalist "$CRAFT_PART_INSTALL/usr/bin/m-txt"
+      install -Dm755 LinuxApp/snap-assets/minimalist-launch "$CRAFT_PART_INSTALL/usr/bin/minimalist-launch"
+    override-prime: |
+      craftctl default
+      # Staged schemas ship uncompiled; GTK needs the compiled cache.
+      if [ -d usr/share/glib-2.0/schemas ]; then
+          glib-compile-schemas usr/share/glib-2.0/schemas || true
+      fi

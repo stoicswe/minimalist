@@ -1,0 +1,79 @@
+name: Linux
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "release/*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SWIFT_VERSION: "6.2.3"
+
+jobs:
+  build:
+    name: Build & test (Ubuntu 26.04)
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libadwaita-1-dev libgtksourceview-5-dev \
+            libcurl4-openssl-dev libedit2 libsqlite3-0 libxml2-dev \
+            libncurses-dev zlib1g-dev
+
+      # Ubuntu's apt swiftlang (6.1) is too old for the UI toolkit's
+      # Swift 6.2 manifests; the swift.org 24.04 toolchain runs on 26.04
+      # with a libxml2 soname shim (26.04 renamed .so.2 -> .so.16).
+      - name: Install Swift ${{ env.SWIFT_VERSION }}
+        run: |
+          curl -fsSL "https://download.swift.org/swift-${SWIFT_VERSION}-release/ubuntu2404/swift-${SWIFT_VERSION}-RELEASE/swift-${SWIFT_VERSION}-RELEASE-ubuntu24.04.tar.gz" \
+            | tar xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/swift-${SWIFT_VERSION}-RELEASE-ubuntu24.04/usr/bin" >> "$GITHUB_PATH"
+          real=$(ls /usr/lib/*/libxml2.so.* | grep -E 'so\.[0-9]+$' | head -1)
+          sudo ln -sf "$real" "$(dirname "$real")/libxml2.so.2"
+
+      - name: MinimalistCore tests
+        run: swift test --package-path MinimalistCore
+
+      - name: Build Linux app
+        run: swift build --package-path LinuxApp
+
+  snap:
+    name: Snap (${{ matrix.arch }})
+    # Snap builds are slow; run them on branch pushes only, not PRs.
+    if: github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-26.04
+          - arch: arm64
+            runner: ubuntu-26.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          # Full history so `git describe` can stamp the snap version.
+          fetch-depth: 0
+
+      - name: Build snap
+        id: snapcraft
+        uses: snapcore/action-build@v1
+
+      - name: Upload snap artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: m-txt-snap-${{ matrix.arch }}
+          path: ${{ steps.snapcraft.outputs.snap }}
+          if-no-files-found: error
