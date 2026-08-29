@@ -30,7 +30,7 @@ struct EnsoLogo: View {
 }
 
 private struct EnsoArc: Shape {
-    func path(in rect: CGRect) -> Path {
+    nonisolated func path(in rect: CGRect) -> Path {
         let side = min(rect.width, rect.height)
         let center = CGPoint(x: rect.midX, y: rect.midY)
         let radius = side * 0.34

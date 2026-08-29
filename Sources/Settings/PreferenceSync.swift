@@ -92,7 +92,13 @@ final class PreferenceSync {
             object: store,
             queue: .main
         ) { [weak self] note in
-            Task { @MainActor in self?.applyRemoteChanges(note: note) }
+            // Pull the changed keys out of the non-Sendable Notification
+            // before crossing into the main actor. Delivered on the main
+            // queue (`queue: .main`) — safe to assume isolation.
+            let keys = note.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String] ?? []
+            MainActor.assumeIsolated {
+                self?.applyRemoteChanges(changedKeys: keys)
+            }
         }
 
         defaultsObserver = NotificationCenter.default.addObserver(
@@ -100,7 +106,9 @@ final class PreferenceSync {
             object: UserDefaults.standard,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.pushChangedToCloud() }
+            MainActor.assumeIsolated {
+                self?.pushChangedToCloud()
+            }
         }
 
         // Reconcile current state with cloud now that we're tracking.
@@ -182,8 +190,7 @@ final class PreferenceSync {
 
     // MARK: - Cloud → local
 
-    private func applyRemoteChanges(note: Notification) {
-        let keys = note.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String] ?? []
+    private func applyRemoteChanges(changedKeys keys: [String]) {
         let touched = keys.filter { Self.syncedKeys.contains($0) }
         guard !touched.isEmpty else { return }
 

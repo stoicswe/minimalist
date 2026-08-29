@@ -77,7 +77,8 @@ struct DoubleShiftMonitor: NSViewRepresentable {
             }
         }
 
-        deinit { removeMonitor() }
+        // Isolated so the main-actor-guarded monitor is legal to touch.
+        isolated deinit { removeMonitor() }
 
         private func removeMonitor() {
             if let m = monitor {

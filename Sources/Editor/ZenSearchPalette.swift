@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import MinimalistCore
 
 /// Spotlight-style search palette shown over the editor in Zen mode. Search
 /// matches across:

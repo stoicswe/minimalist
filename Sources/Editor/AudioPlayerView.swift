@@ -200,7 +200,9 @@ final class AudioPlayerCoordinator: ObservableObject {
     private var statusObservation: NSKeyValueObservation?
     private var rateObservation: NSKeyValueObservation?
 
-    deinit {
+    // Isolated so the main-actor-guarded player/observer state is legal
+    // to touch; the runtime schedules this deinit onto the main actor.
+    isolated deinit {
         if let observer = timeObserver {
             player?.removeTimeObserver(observer)
         }

@@ -1,4 +1,5 @@
 import SwiftUI
+import MinimalistCore
 
 /// Observable git state for the currently open workspace folder.
 /// Refreshes on demand; cheap enough to call after every checkout.

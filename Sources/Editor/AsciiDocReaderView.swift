@@ -117,27 +117,19 @@ private struct AsciiDocWebView: NSViewRepresentable {
             webView.loadHTMLString(html, baseURL: nil)
         }
 
-        nonisolated func webView(
+        func webView(
             _ webView: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,
-            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+            decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void
         ) {
-            // Delegate callbacks fire on the main thread, but the
-            // protocol method itself is non-isolated — hop into the
-            // main actor's isolation so we can read the navigation
-            // action's properties without warnings.
-            let (navType, url) = MainActor.assumeIsolated {
-                (navigationAction.navigationType, navigationAction.request.url)
-            }
-
             // Initial template load + any JS-driven nav report `.other`
             // and should pass through.
-            if navType == .other {
+            if navigationAction.navigationType == .other {
                 decisionHandler(.allow)
                 return
             }
 
-            guard let url else {
+            guard let url = navigationAction.request.url else {
                 decisionHandler(.cancel)
                 return
             }
@@ -151,9 +143,7 @@ private struct AsciiDocWebView: NSViewRepresentable {
                 return
             }
 
-            Task { @MainActor in
-                self.handleClickedLink(url)
-            }
+            handleClickedLink(url)
             decisionHandler(.cancel)
         }
 
@@ -216,7 +206,7 @@ private struct AsciiDocWebView: NSViewRepresentable {
 /// Resolves the bundled asciidoctor template + scripts at runtime.
 /// xcodegen places `Resources/asciidoctor` into the app bundle as a
 /// folder reference, so we look it up under `Bundle.main.resourceURL`.
-enum AsciiDocResources {
+nonisolated enum AsciiDocResources {
     static var directoryURL: URL? {
         Bundle.main.resourceURL?
             .appendingPathComponent("asciidoctor", isDirectory: true)

@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Highlightr
+import MinimalistCore
 
 /// Side-panel minimap (à la Xcode):
 ///
@@ -14,7 +15,9 @@ import Highlightr
 /// - Click or drag to scroll the editor — the line under your pointer
 ///   becomes the new top of the editor's viewport.
 struct MinimapView: View {
-    @ObservedObject var document: Document
+    // Qualified to keep Xcode's indexer from ever reporting a phantom
+    // ambiguity with the app module's pre-split Document.
+    var document: MinimalistCore.Document
     @ObservedObject var bridge: MinimapBridge
 
     var body: some View {
@@ -173,7 +176,7 @@ private struct MinimapCanvas: View {
 
 // MARK: - Snapshot model
 
-struct MinimapBar {
+nonisolated struct MinimapBar {
     let line: Int
     let startColumn: Int
     let length: Int
@@ -181,12 +184,14 @@ struct MinimapBar {
 
 /// Bars that share a display color, so drawing can batch them into a
 /// single fill.
-struct MinimapBarGroup {
+nonisolated struct MinimapBarGroup {
     let color: Color
     let bars: [MinimapBar]
 }
 
-struct MinimapSnapshot {
+/// The whole snapshot pipeline runs on `buildQueue`, off the main
+/// actor — hence `nonisolated` despite the app's MainActor default.
+nonisolated struct MinimapSnapshot {
     let groups: [MinimapBarGroup]
     let lineCount: Int
     let maxColumn: Int
@@ -201,9 +206,10 @@ struct MinimapSnapshot {
         label: "com.stoicswe.minimalist.minimap-highlight",
         qos: .userInitiated
     )
-    // Confined to `buildQueue`.
-    private static var cachedHighlightr: Highlightr?
-    private static var cachedTheme = ""
+    // Confined to `buildQueue`, which is what makes the unsafe opt-out
+    // sound — nothing else may touch these.
+    nonisolated(unsafe) private static var cachedHighlightr: Highlightr?
+    nonisolated(unsafe) private static var cachedTheme = ""
 
     /// Above this size (UTF-16 units), skip syntax highlighting for the
     /// minimap and render single-color structural bars — running a JS

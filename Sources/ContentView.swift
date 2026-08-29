@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import MinimalistCore
 
 struct ContentView: View {
     @EnvironmentObject var workspace: Workspace
@@ -276,7 +277,7 @@ private struct EditorContainer: View {
     @EnvironmentObject var workspace: Workspace
     /// Per-document toggle for the markdown reader view. Keyed by document
     /// id so each tab remembers its own mode while it's open.
-    @State private var readerEnabled: [Document.ID: Bool] = [:]
+    @State private var readerEnabled: [MinimalistCore.Document.ID: Bool] = [:]
     /// Application-wide toggle for the minimap side view, persisted across
     /// sessions so the user's choice sticks.
     @AppStorage(PreferenceKeys.showMinimap) private var showMinimap: Bool = false
@@ -405,7 +406,7 @@ private struct EditorContainer: View {
     }
 
     @ViewBuilder
-    private func primaryContent(for doc: Document) -> some View {
+    private func primaryContent(for doc: MinimalistCore.Document) -> some View {
         switch doc.kind {
         case .pdf:
             PDFViewerView(url: doc.url)
@@ -438,7 +439,7 @@ private struct EditorContainer: View {
     }
 
     @ViewBuilder
-    private func textPrimaryContent(for doc: Document) -> some View {
+    private func textPrimaryContent(for doc: MinimalistCore.Document) -> some View {
         if DocumentKindDetector.supportsReaderView(doc.url) && (readerEnabled[doc.id] ?? false) {
             readerView(for: doc)
                 .id("reader-\(doc.id)")
@@ -468,7 +469,7 @@ private struct EditorContainer: View {
     }
 
     @ViewBuilder
-    private func readerView(for doc: Document) -> some View {
+    private func readerView(for doc: MinimalistCore.Document) -> some View {
         if DocumentKindDetector.isAsciiDoc(doc.url) {
             AsciiDocReaderView(text: doc.text, sourceURL: doc.url)
         } else {
@@ -476,7 +477,7 @@ private struct EditorContainer: View {
         }
     }
 
-    private func readerToggle(for doc: Document) -> some View {
+    private func readerToggle(for doc: MinimalistCore.Document) -> some View {
         let active = readerEnabled[doc.id] ?? false
         return cornerToggleButton(
             symbol: active ? "pencil" : "book",
@@ -513,7 +514,9 @@ private struct EditorContainer: View {
 
 /// NSItemProvider hands fileURL items back as Data, NSURL, or URL
 /// depending on the source. Normalize to URL.
-private func resolveDroppedFileURL(from item: Any?) -> URL? {
+// Called from `NSItemProvider.loadItem` completion handlers, which run
+// off the main thread — hence `nonisolated` despite the MainActor default.
+nonisolated private func resolveDroppedFileURL(from item: Any?) -> URL? {
     if let url = item as? URL { return url }
     if let url = item as? NSURL { return url as URL }
     if let data = item as? Data {
@@ -609,7 +612,7 @@ private struct TabBar: View {
 
 private struct TabButton: View {
     @EnvironmentObject var workspace: Workspace
-    @ObservedObject var document: Document
+    var document: MinimalistCore.Document
     @State private var hovering = false
     @State private var historyContext: HistoryContext?
 

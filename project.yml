@@ -18,10 +18,14 @@ settings:
   base:
     DEVELOPMENT_TEAM: P22P7U46RW
     CODE_SIGN_STYLE: Automatic
-    SWIFT_VERSION: "5.10"
+    SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     ENABLE_HARDENED_RUNTIME: YES
-    SWIFT_STRICT_CONCURRENCY: minimal
+    # Swift 6 language mode with main-actor-by-default isolation — the
+    # recommended profile for an app target that is almost entirely UI.
+    # Off-main work must opt out explicitly (nonisolated / Task.detached).
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
     GENERATE_INFOPLIST_FILE: NO
     # Xcode 27 recommended settings — kept here so regeneration doesn't
     # revert them and retrigger the upgrade prompt.
@@ -36,12 +40,11 @@ packages:
   MarkdownUI:
     url: https://github.com/gonzalezreal/swift-markdown-ui
     from: 2.4.0
-  # libgit2 compiled from source via SPM. Replaces /usr/bin/git
-  # subprocesses, which App Sandbox (required for TestFlight / Mac App
-  # Store) forbids. GPLv2 with linking exception — safe to embed.
-  libgit2:
-    url: https://github.com/ibrahimcetin/libgit2.git
-    exactVersion: 1.9.2
+  # Platform-neutral model layer (documents, file tree, revisions, git
+  # via libgit2). Lives in-repo so a future Linux front end can share it;
+  # nothing in it may import AppKit or SwiftUI.
+  MinimalistCore:
+    path: MinimalistCore
 
 targets:
   m.txt:
@@ -213,7 +216,7 @@ targets:
     dependencies:
       - package: Highlightr
       - package: MarkdownUI
-      - package: libgit2
+      - package: MinimalistCore
 
 schemes:
   m.txt:

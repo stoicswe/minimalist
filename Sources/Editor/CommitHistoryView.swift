@@ -1,4 +1,5 @@
 import SwiftUI
+import MinimalistCore
 
 /// Repository git log for a single file. Read-only view — listing only;
 /// the user's repo isn't ours to modify.

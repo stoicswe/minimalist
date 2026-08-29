@@ -1,23 +1,28 @@
 import Foundation
 
-struct Indentation: Equatable {
-    enum Kind: String, CaseIterable, Identifiable {
+public struct Indentation: Equatable, Sendable {
+    public enum Kind: String, CaseIterable, Identifiable, Sendable {
         case tabs, spaces
-        var id: String { rawValue }
-        var label: String { self == .tabs ? "Tabs" : "Spaces" }
+        public var id: String { rawValue }
+        public var label: String { self == .tabs ? "Tabs" : "Spaces" }
     }
 
-    var kind: Kind
-    var width: Int
+    public var kind: Kind
+    public var width: Int
 
-    var unit: String {
+    public init(kind: Kind, width: Int) {
+        self.kind = kind
+        self.width = width
+    }
+
+    public var unit: String {
         switch kind {
         case .tabs: return "\t"
         case .spaces: return String(repeating: " ", count: max(width, 1))
         }
     }
 
-    static func detect(in text: String) -> Indentation? {
+    public static func detect(in text: String) -> Indentation? {
         var tabLines = 0
         var spaceCounts: [Int: Int] = [:]
         for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
@@ -41,13 +46,13 @@ struct Indentation: Equatable {
         return Indentation(kind: .spaces, width: widths.first ?? 4)
     }
 
-    static func defaultsFromUserPrefs() -> Indentation {
+    public static func defaultsFromUserPrefs() -> Indentation {
         let kindRaw = UserDefaults.standard.string(forKey: "default.indent.kind") ?? Kind.spaces.rawValue
         let width = UserDefaults.standard.object(forKey: "default.indent.width") as? Int ?? 4
         return Indentation(kind: Kind(rawValue: kindRaw) ?? .spaces, width: width)
     }
 
-    func reformat(text: String, from old: Indentation) -> String {
+    public func reformat(text: String, from old: Indentation) -> String {
         let lines = text.components(separatedBy: "\n")
         let oldUnitWidth: Int = (old.kind == .tabs) ? 1 : max(old.width, 1)
         let result = lines.map { line -> String in

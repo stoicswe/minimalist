@@ -124,7 +124,10 @@ struct MarkdownReaderView: View {
 /// One independently renderable slice of a markdown document, with its
 /// content already parsed. `id` is the slice's position, so SwiftUI can
 /// diff a rebuilt chunk list against the old one.
-struct ReaderChunk: Identifiable, Equatable {
+// `@unchecked` only because MarkdownUI predates strict concurrency and
+// hasn't annotated `MarkdownContent`; it's an immutable parsed value,
+// built once in the builder task and only read afterward.
+nonisolated struct ReaderChunk: Identifiable, Equatable, @unchecked Sendable {
     let id: Int
     let content: MarkdownContent
 }
@@ -147,7 +150,9 @@ struct ReaderChunk: Identifiable, Equatable {
 /// Link-reference definitions are collected once and appended to every
 /// chunk, so `[text][ref]` style links keep resolving no matter which
 /// section their definition originally lived in.
-enum MarkdownChunkBuilder {
+// Runs inside `Task.detached` from the reader view — hence
+// `nonisolated` despite the app's MainActor default.
+nonisolated enum MarkdownChunkBuilder {
     /// Spacing between chunk views. Every chunk after the first starts
     /// with a heading, and the gitHub theme gives headings a 24pt top
     /// margin — so this reproduces the in-document section spacing.

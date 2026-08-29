@@ -15,8 +15,8 @@ import Foundation
 ///
 /// Both tracks live side-by-side and a unified `revisions(for:)` method
 /// merges them by date for the history viewer.
-final class RevisionTracker {
-    let workspaceURL: URL
+public final class RevisionTracker {
+    public let workspaceURL: URL
 
     /// Hard cap on autosave snapshots per file.
     static let maxAutosavesPerFile = 25
@@ -29,7 +29,7 @@ final class RevisionTracker {
     private var lastAutosaveAt: [String: Date] = [:]
     private var lastAutosaveContent: [String: Int] = [:]
 
-    init(workspaceURL: URL) {
+    public init(workspaceURL: URL) {
         self.workspaceURL = workspaceURL
         bootstrapIfNeeded()
     }
@@ -93,7 +93,7 @@ final class RevisionTracker {
     /// Drop a timestamped snapshot of the file's current content. Caller is
     /// responsible for invoking this on the appropriate cadence (debounced
     /// in the editor's text-change handler).
-    func recordAutosave(file url: URL, content: String) {
+    public func recordAutosave(file url: URL, content: String) {
         guard let rel = relativePath(for: url) else { return }
 
         // Skip if this exact content was just snapshotted — no point
@@ -136,7 +136,7 @@ final class RevisionTracker {
     /// git repo. The mirror at `files/<relative-path>` is updated first,
     /// then `git add` + `git commit`.
     @discardableResult
-    func commitOnSave(file url: URL, content: String, message: String? = nil) -> Bool {
+    public func commitOnSave(file url: URL, content: String, message: String? = nil) -> Bool {
         guard let rel = relativePath(for: url) else { return false }
         let dest = filesDir.appendingPathComponent(rel)
         do {
@@ -165,7 +165,7 @@ final class RevisionTracker {
 
     /// Commit a batch of files at once — used at app quit so all the open
     /// dirty docs land as a single "session end" snapshot.
-    func commitSessionEnd(files: [(url: URL, content: String)]) {
+    public func commitSessionEnd(files: [(url: URL, content: String)]) {
         guard !files.isEmpty, let repo = mirrorRepo() else { return }
         for entry in files {
             guard let rel = relativePath(for: entry.url) else { continue }
@@ -188,7 +188,7 @@ final class RevisionTracker {
     // MARK: - Reading history
 
     /// Combined autosave + commit history for a file, newest first.
-    func revisions(for url: URL) -> [Revision] {
+    public func revisions(for url: URL) -> [Revision] {
         guard let rel = relativePath(for: url) else { return [] }
         return (autosaves(for: rel) + commits(for: rel))
             .sorted { $0.date > $1.date }
@@ -225,7 +225,7 @@ final class RevisionTracker {
     }
 
     /// Read the file's content as it existed at a given revision.
-    func content(for revision: Revision, file url: URL) -> String? {
+    public func content(for revision: Revision, file url: URL) -> String? {
         switch revision.kind {
         case .autosave:
             let snapURL = URL(fileURLWithPath: revision.identifier)
@@ -240,7 +240,7 @@ final class RevisionTracker {
     /// content is captured as a fresh autosave first so the revert itself
     /// is undoable from the history viewer.
     @discardableResult
-    func revert(file url: URL, to revision: Revision) -> String? {
+    public func revert(file url: URL, to revision: Revision) -> String? {
         if let current = try? String(contentsOf: url, encoding: .utf8) {
             recordAutosave(file: url, content: current)
         }
@@ -253,15 +253,15 @@ final class RevisionTracker {
 
 /// One entry in a file's history — either an autosave snapshot or a
 /// commit in the `.minimal` git mirror.
-struct Revision: Hashable, Identifiable {
-    enum Kind: Hashable { case autosave, commit }
+public struct Revision: Hashable, Identifiable, Sendable {
+    public enum Kind: Hashable, Sendable { case autosave, commit }
 
-    let kind: Kind
+    public let kind: Kind
     /// For autosaves: full path to the snapshot file. For commits: the
     /// short SHA used to look the commit up via `git show`.
-    let identifier: String
-    let date: Date
-    let summary: String
+    public let identifier: String
+    public let date: Date
+    public let summary: String
 
-    var id: String { "\(kind)\(identifier)" }
+    public var id: String { "\(kind)\(identifier)" }
 }

@@ -10,7 +10,7 @@ import UniformTypeIdentifiers
 /// async — the corresponding pill views run them in `.task` modifiers
 /// so a heavy file doesn't block the main thread.
 
-struct ImageMetadata: Equatable {
+nonisolated struct ImageMetadata: Equatable {
     var pixelSize: CGSize?
     var format: String?
     var fileSize: Int64?
@@ -19,7 +19,7 @@ struct ImageMetadata: Equatable {
     var hasAlpha: Bool?
 }
 
-struct VideoMetadata: Equatable {
+nonisolated struct VideoMetadata: Equatable {
     var resolution: CGSize?
     var durationSeconds: Double?
     var frameRate: Float?
@@ -27,7 +27,7 @@ struct VideoMetadata: Equatable {
     var fileSize: Int64?
 }
 
-struct AudioMetadata: Equatable {
+nonisolated struct AudioMetadata: Equatable {
     var durationSeconds: Double?
     var sampleRate: Double?
     var channelCount: Int?
@@ -38,19 +38,21 @@ struct AudioMetadata: Equatable {
     var artist: String?
 }
 
-struct BinaryMetadata: Equatable {
+nonisolated struct BinaryMetadata: Equatable {
     var fileSize: Int64
     var typeDescription: String?
     var magicHeader: String?
 }
 
-struct PDFMetadata: Equatable {
+nonisolated struct PDFMetadata: Equatable {
     var pageCount: Int?
     var pageSize: CGSize?
     var fileSize: Int64?
 }
 
-enum MediaMetadataLoader {
+// Every loader hops to a detached utility task — the whole namespace
+// is off-main-actor work, hence `nonisolated`.
+nonisolated enum MediaMetadataLoader {
     static func image(at url: URL) async -> ImageMetadata {
         await Task.detached(priority: .utility) {
             var meta = ImageMetadata()

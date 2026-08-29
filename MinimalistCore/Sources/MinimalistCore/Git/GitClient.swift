@@ -6,21 +6,21 @@ import libgit2
 /// App Sandbox forbids. All calls are synchronous and safe to run from
 /// any single thread at a time; call sites invoke them off the main
 /// thread, mirroring the old subprocess pattern.
-final class GitClient {
-    enum ClientError: Error, LocalizedError {
+public final class GitClient {
+    public enum ClientError: Error, LocalizedError {
         case libgit2(String)
-        var errorDescription: String? {
+        public var errorDescription: String? {
             if case .libgit2(let message) = self { return message }
             return nil
         }
     }
 
     /// One commit touching a specific file, as surfaced by `fileLog`.
-    struct FileCommit {
-        let sha: String
-        let author: String
-        let date: Date
-        let subject: String
+    public struct FileCommit: Sendable {
+        public let sha: String
+        public let author: String
+        public let date: Date
+        public let subject: String
     }
 
     private let repo: OpaquePointer
@@ -45,7 +45,7 @@ final class GitClient {
     /// Open the repository containing `url`, searching parent directories
     /// the way `git rev-parse` does. Returns nil when there is no
     /// repository (or only a bare one, which has no work tree to show).
-    static func open(containing url: URL) -> GitClient? {
+    public static func open(containing url: URL) -> GitClient? {
         _ = initializeOnce
         var repo: OpaquePointer?
         let code = url.path.withCString { path in
@@ -62,7 +62,7 @@ final class GitClient {
     /// Open the repository exactly at `url` — no parent-directory search.
     /// Used for the private `.minimal/files` mirror, where falling back
     /// to an enclosing user repository would be actively harmful.
-    static func open(at url: URL) -> GitClient? {
+    public static func open(at url: URL) -> GitClient? {
         _ = initializeOnce
         var repo: OpaquePointer?
         let code = url.path.withCString { path in
@@ -74,7 +74,7 @@ final class GitClient {
 
     /// Absolute path of the repository's work-tree root, or nil for a
     /// bare repository.
-    var workTreePath: String? {
+    public var workTreePath: String? {
         guard let raw = git_repository_workdir(repo) else { return nil }
         return String(cString: raw)
     }
@@ -82,7 +82,7 @@ final class GitClient {
     /// Translate an absolute file URL into a path relative to the
     /// repository root — the form libgit2's tree lookups and pathspecs
     /// expect. Returns nil when the file lies outside the work tree.
-    func repoRelativePath(of url: URL) -> String? {
+    public func repoRelativePath(of url: URL) -> String? {
         guard let root = workTreePath else { return nil }
         let rootPath = URL(fileURLWithPath: root).standardizedFileURL.path
         let filePath = url.standardizedFileURL.path
@@ -91,7 +91,7 @@ final class GitClient {
     }
 
     /// `git init` (non-bare) at `url`, creating directories as needed.
-    static func create(at url: URL) throws -> GitClient {
+    public static func create(at url: URL) throws -> GitClient {
         _ = initializeOnce
         var repo: OpaquePointer?
         try check(url.path.withCString { path in
@@ -108,7 +108,7 @@ final class GitClient {
     /// Current branch name; short commit SHA when HEAD is detached; nil
     /// for an unborn HEAD (fresh repo with no commits) — matching
     /// `git rev-parse --abbrev-ref HEAD` as the app used it.
-    func currentBranch() -> String? {
+    public func currentBranch() -> String? {
         guard git_repository_head_unborn(repo) != 1 else { return nil }
         var ref: OpaquePointer?
         guard git_repository_head(&ref, repo) == 0, let head = ref else { return nil }
@@ -130,7 +130,7 @@ final class GitClient {
         return String(cString: short)
     }
 
-    func localBranches() -> [String] {
+    public func localBranches() -> [String] {
         var iterator: OpaquePointer?
         guard git_branch_iterator_new(&iterator, repo, GIT_BRANCH_LOCAL) == 0,
               let iter = iterator
@@ -153,7 +153,7 @@ final class GitClient {
 
     /// `git checkout <branch>` — safe checkout (refuses to clobber local
     /// modifications, like the CLI), then repoints HEAD.
-    func checkout(branch name: String) throws {
+    public func checkout(branch name: String) throws {
         var ref: OpaquePointer?
         try Self.check(name.withCString { n in
             git_branch_lookup(&ref, repo, n, GIT_BRANCH_LOCAL)
@@ -182,7 +182,7 @@ final class GitClient {
     }
 
     /// `git checkout -b <name>` — create a branch at HEAD and switch to it.
-    func createBranch(named name: String) throws {
+    public func createBranch(named name: String) throws {
         var headObject: OpaquePointer?
         try Self.check(git_revparse_single(&headObject, repo, "HEAD"),
                        "Repository has no commits yet")
@@ -208,7 +208,7 @@ final class GitClient {
     // MARK: - Staging and committing
 
     /// `git add -- <path>` (path relative to the repo root).
-    func stage(relativePath: String) throws {
+    public func stage(relativePath: String) throws {
         var indexPointer: OpaquePointer?
         try Self.check(git_repository_index(&indexPointer, repo), "Couldn't open index")
         guard let index = indexPointer else { throw ClientError.libgit2("Couldn't open index") }
@@ -223,7 +223,7 @@ final class GitClient {
     /// `git commit --allow-empty -m <message>` with an explicit identity
     /// (no dependence on user-level git config, which doesn't exist in
     /// the sandbox container).
-    func commit(message: String, authorName: String, authorEmail: String) throws {
+    public func commit(message: String, authorName: String, authorEmail: String) throws {
         var indexPointer: OpaquePointer?
         try Self.check(git_repository_index(&indexPointer, repo), "Couldn't open index")
         guard let index = indexPointer else { throw ClientError.libgit2("Couldn't open index") }
@@ -267,7 +267,7 @@ final class GitClient {
     /// keeping commits where the file's blob differs from the first
     /// parent (or appears/disappears). `scanCap` bounds the walk on huge
     /// repositories.
-    func fileLog(relativePath: String, limit: Int, scanCap: Int = 10_000) -> [FileCommit] {
+    public func fileLog(relativePath: String, limit: Int, scanCap: Int = 10_000) -> [FileCommit] {
         var walkPointer: OpaquePointer?
         guard git_revwalk_new(&walkPointer, repo) == 0, let walk = walkPointer else { return [] }
         defer { git_revwalk_free(walk) }
@@ -322,7 +322,7 @@ final class GitClient {
     }
 
     /// `git show <sha>:<path>` — the file's content at that commit.
-    func blobContent(commitSHA: String, relativePath: String) -> String? {
+    public func blobContent(commitSHA: String, relativePath: String) -> String? {
         guard let commit = revparseCommit(commitSHA) else { return nil }
         defer { git_object_free(commit) }
 
@@ -351,7 +351,7 @@ final class GitClient {
     /// `git show <sha> -- <path>` — the unified diff this commit applied
     /// to one file (against its first parent; against the empty tree for
     /// root commits).
-    func patch(commitSHA: String, relativePath: String) -> String? {
+    public func patch(commitSHA: String, relativePath: String) -> String? {
         guard let commit = revparseCommit(commitSHA) else { return nil }
         defer { git_object_free(commit) }
 
@@ -443,7 +443,8 @@ final class GitClient {
     private static func hexString(of oid: inout git_oid) -> String {
         var chars = [CChar](repeating: 0, count: Int(GIT_OID_MAX_HEXSIZE) + 1)
         git_oid_fmt(&chars, &oid)
-        return String(cString: chars)
+        let hex = chars.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+        return String(decoding: hex, as: UTF8.self)
     }
 
     @discardableResult

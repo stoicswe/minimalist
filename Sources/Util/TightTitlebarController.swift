@@ -42,8 +42,12 @@ final class TightTitlebarController: NSObject {
         ]
         let tokens = names.map { name in
             center.addObserver(forName: name, object: window, queue: .main) { [weak self, weak window] _ in
-                guard let self, let window else { return }
-                self.repositionButtons(in: window)
+                // Delivered on the main queue (`queue: .main`), which is
+                // the main actor's executor — safe to assume isolation.
+                MainActor.assumeIsolated {
+                    guard let self, let window else { return }
+                    self.repositionButtons(in: window)
+                }
             }
         }
         observers[id] = tokens

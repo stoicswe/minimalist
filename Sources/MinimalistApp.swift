@@ -203,7 +203,7 @@ private struct WindowWorkspaceBinder: NSViewRepresentable {
 /// Tracks the workspace owned by each Minimalist window plus which one is
 /// currently key, so menu commands can always reach the right one.
 @MainActor
-final class WorkspaceCoordinator {
+final class WorkspaceCoordinator: NSObject {
     static let shared = WorkspaceCoordinator()
 
     private var registry: [ObjectIdentifier: Workspace] = [:]
@@ -242,29 +242,35 @@ final class WorkspaceCoordinator {
     private func installObserversIfNeeded() {
         guard !observersInstalled else { return }
         observersInstalled = true
+        // Selector-based observers — the closure API would require
+        // sending the non-Sendable Notification across isolation. Both
+        // notifications post on the main thread, matching this class's
+        // MainActor isolation.
         NotificationCenter.default.addObserver(
-            forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main
-        ) { [weak self] note in
-            Task { @MainActor in
-                guard let self, let window = note.object as? NSWindow else { return }
-                let key = ObjectIdentifier(window)
-                if self.registry[key] != nil {
-                    self.lastKeyWindow = window
-                    self.orderedWindows.removeAll { $0 == key }
-                    self.orderedWindows.insert(key, at: 0)
-                }
-            }
-        }
+            self, selector: #selector(windowDidBecomeKey(_:)),
+            name: NSWindow.didBecomeKeyNotification, object: nil
+        )
         NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification, object: nil, queue: .main
-        ) { [weak self] note in
-            Task { @MainActor in
-                guard let self, let window = note.object as? NSWindow else { return }
-                let key = ObjectIdentifier(window)
-                self.registry.removeValue(forKey: key)
-                self.orderedWindows.removeAll { $0 == key }
-            }
+            self, selector: #selector(windowWillClose(_:)),
+            name: NSWindow.willCloseNotification, object: nil
+        )
+    }
+
+    @objc private func windowDidBecomeKey(_ note: Notification) {
+        guard let window = note.object as? NSWindow else { return }
+        let key = ObjectIdentifier(window)
+        if registry[key] != nil {
+            lastKeyWindow = window
+            orderedWindows.removeAll { $0 == key }
+            orderedWindows.insert(key, at: 0)
         }
+    }
+
+    @objc private func windowWillClose(_ note: Notification) {
+        guard let window = note.object as? NSWindow else { return }
+        let key = ObjectIdentifier(window)
+        registry.removeValue(forKey: key)
+        orderedWindows.removeAll { $0 == key }
     }
 }
 
