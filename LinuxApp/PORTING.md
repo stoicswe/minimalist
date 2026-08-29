@@ -141,20 +141,24 @@ recovery drafts are written on a debounce).
 
 ### 1.9 Keyboard shortcuts (macOS ⌘ ⇒ Linux Ctrl unless noted)
 
-| macOS | Action | Linux v1 today |
+| macOS | Action | Linux |
 |---|---|---|
 | ⌘N | New untitled tab | Ctrl+N ✓ |
-| ⌘⇧N | New window | — |
+| ⌘⇧N | New window | — (single window for now) |
 | ⌘O | Open file | Ctrl+O ✓ |
 | ⌘⇧O | Open folder | Ctrl+Shift+O ✓ |
 | ⌘S | Save (untitled ⇒ Save As) | Ctrl+S ✓ |
-| ⌘W | Close **window** | — (window close button) |
-| ⌘⇧W | Close **tab** | **Ctrl+W** — deliberate deviation: GNOME convention is Ctrl+W for tab close. Decide & document. |
-| ⌘⌥W | Toggle word wrap | — |
-| ⌘⌃Z | Zen mode | — |
-| ⌘⌥← / ⌘⌥→ | Move tab left/right | — |
-| ⇧⇧ (double-shift) | Search palette | — |
-| Space | Play/pause (audio viewer) | — |
+| — | Save As | Ctrl+Shift+S ✓ |
+| ⌘W | Close **window** | **Ctrl+Shift+W** — deliberate deviation |
+| ⌘⇧W | Close **tab** | **Ctrl+W** — deliberate deviation: GNOME convention is Ctrl+W for tab close |
+| ⌘⌥W | Toggle word wrap | Ctrl+Alt+W ✓ |
+| ⌘⌃Z | Zen mode | **Ctrl+Alt+Z** (⌘⌃ has no GNOME analogue) ✓ |
+| ⌘⌥← / ⌘⌥→ | Move tab left/right | Ctrl+Alt+← / Ctrl+Alt+→ ✓ |
+| ⇧⇧ (double-shift) | Search palette | ⇧⇧ ✓, plus **Ctrl+P** as a discoverable alias |
+| — | Toggle sidebar | Ctrl+B ✓ |
+| — | Preferences | Ctrl+, ✓ |
+| — | Keyboard shortcuts window | Ctrl+? ✓ |
+| Space | Play/pause (audio viewer) | Handled by GTK's media controls ✓ |
 
 ---
 
@@ -162,52 +166,50 @@ recovery drafts are written on a debounce).
 
 Status: ✅ done · 🟡 partial · ⬜ not started · ❌ intentionally skipped
 
-| Feature | Linux status | Linux strategy |
+| Feature | Linux status | Linux implementation |
 |---|---|---|
-| Window shell (header bar, split view) | ✅ | Adwaita `HeaderBar` + `OverlaySplitView` replaces custom titlebar/TopBar |
-| File tree (expand/collapse, hides `.minimal`) | 🟡 | Flattened `FileRow` list; missing: icons, compacted chains, context menu, drag & drop, live reload on FS changes |
-| Tabs | 🟡 | `ToggleGroup` strip; missing: dirty dot per tab, close button per tab, preview tabs, reorder, unsaved-changes prompt |
-| Text editor + highlighting + line numbers | ✅ | `CodeEditor` (GtkSourceView) — themes via GtkSourceView style schemes |
+| Window shell (header bar, split view) | ✅ | Adwaita `HeaderBar` + `OverlaySplitView` replaces the custom titlebar/TopBar; the folder name + branch pill live at the top of the sidebar |
+| File tree (expand/collapse, hides `.minimal`) | 🟡 | Flattened `FileRow` list with compacted `parent.child` chains and the macOS monogram chips (`MinimalistCore.FileTypeBadge`). Missing: internal drag-to-move (external file drops do copy in) and live FS watching |
+| Tabs (dirty dot, close button, preview, reorder) | ✅ | Pill tab strip; preview tabs are italic single-slot and pin on edit or double-click; Ctrl+Alt+←/→ reorders; closing a dirty tab raises the Save / Don't Save / Cancel `AlertDialog` |
+| Text editor + highlighting + line numbers | ✅ | `SourceEditor` (GtkSourceView) with one buffer per open document, so undo, cursor, and scroll survive tab switches |
 | Open/save/save-as/new untitled | ✅ | Portal dialogs (`fileImporter`/`folderImporter`/`fileExporter`) |
-| Dirty indicator | 🟡 | Window title `•` only (active tab) |
+| Dirty indicator | ✅ | Per-tab `•` plus the window title |
 | Git branch display | ✅ | Shared `GitService` |
-| Branch popover (checkout / create) | ⬜ | `Popover` or `MenuButton` off the header bar |
-| Minimap | ⬜ | **`GtkSourceMap`** — GtkSourceView's built-in minimap; bind to the same buffer |
-| Status pill (language/indent/EOL popover) | ⬜ | Bottom overlay + `Popover`; pickers write through to `Document` |
-| Completion (ghost text, keywords toggle) | ⬜ | GtkSourceCompletion provider fed by core `CompletionEngine` |
-| Word wrap toggle | ⬜ | GtkSourceView wrap-mode property + shortcut |
-| Search palette (⇧⇧, files + `:line`, recents) | ⬜ | Overlay + `SearchEntry`; needs a key-event hook for double-shift (GTK `EventControllerKey`) |
-| Markdown reader view | ⬜ | Options: WebKitGTK page (closest to AsciiDoc path) or native widgets; toggle button appears for md/adoc only |
-| AsciiDoc reader | ⬜ | WebKitGTK + the same `Resources/asciidoctor/` assets (share them — move to a common location) |
-| Revision history (autosaves + `.minimal` commits, revert) | ⬜ | Core `RevisionTracker` is ready & tested; wire autosave debounce + ⌘S-commit hooks into save/edit paths, then a dialog for the list/preview/revert |
-| Commit history (user repo log + patch) | ⬜ | Core `GitClient.fileLog`/`patch` ready; needs dialog UI |
-| Preview tabs (italic, single-slot) | ⬜ | Port `Workspace.openPreview` semantics into the Linux tab layer |
-| Session restore (folder + tabs per window) | ⬜ | Plain paths (no bookmarks); store JSON under `~/.local/state/m-txt/` rather than UserDefaults |
-| Recents | ⬜ | Same JSON state file |
-| Preferences window | ⬜ | `PreferencesDialog`/`PreferencesPage` (Adwaita has these); scope: font+size, syntax themes, indent defaults, keywords toggle, open-location behavior |
-| Media viewers (image/video/audio) | ⬜ | GStreamer (GTK4 `Gtk.Video`/`MediaFile`); image via `Picture` |
-| PDF viewer | ⬜ | poppler-glib, or ❌ v1 |
-| Hex viewer | ⬜ | Monospace `TextEditor` rendering of hex dump (core can supply the formatter) |
-| File-tree context menu ops | ⬜ | Core-worthy: move `FileOperations`' pure-FS parts (rename/duplicate/unique-name/copy/move) into MinimalistCore, leaving only dialogs + trash per-platform (Linux trash: GIO / `gio trash`) |
-| Editor backgrounds (sepia/dark) | ⬜ | CSS providers on the source view |
+| Branch popover (checkout / create) | ✅ | Menu off the sidebar's branch pill; create-branch uses an `AlertDialog` + `EntryRow` |
+| Minimap | ✅ | **`GtkSourceMap`** docked at the editor's trailing edge; toggle floats over the editor |
+| Status pill (language/indent/EOL popover) | ✅ | Bottom-trailing overlay + `Popover` with language / indentation / line-ending pickers and "Use as default" |
+| Completion | ✅ | GtkSourceCompletion: a words provider over the document plus a second one fed from core's `LanguageKeywords`. **Deviation:** GNOME's completion list instead of macOS's inline ghost text |
+| Word wrap toggle | ✅ | GtkSourceView wrap mode, Ctrl+Alt+W and a preference |
+| Search palette (⇧⇧, files + `:line`, recents) | 🟡 | Overlay + `SearchEntry`, fuzzy filename ranking (`WorkspaceSearch`), in-file line matches, `:line` jumps, recents on an empty query. Missing: the macOS `.` folder-browse mode |
+| Markdown reader view | ✅ | **Deviation:** a native Markdown → Pango renderer (`MarkdownRenderer`) instead of a WebKit page, which keeps WebKitGTK out of the snap |
+| AsciiDoc reader | ⬜ | Would need WebKitGTK + the shared `Resources/asciidoctor/` assets |
+| Revision history (autosaves + `.minimal` commits, revert) | ✅ | Core `RevisionTracker`: autosave debounce on edit, mirror commit on save, "session end" commit at quit; dialog lists revisions with preview + revert |
+| Commit history (user repo log + patch) | ✅ | Core `GitClient.fileLog`/`patch` in a two-pane dialog |
+| Preview tabs (italic, single-slot) | ✅ | `openFile(_:preview:)` mirrors `Workspace.openPreview` |
+| Session restore (folder + tabs) | 🟡 | Plain paths in `~/.local/state/m-txt/session.json`, saved on every change. Missing: multiple windows (the Linux app is single-window) |
+| Recents | ✅ | Same JSON state file; feeds the palette |
+| Preferences window | ✅ | `PreferencesDialog`: editor font, line numbers/minimap/wrap/current line, indentation + line-ending defaults, completion toggles, syntax themes, editor background |
+| Media viewers (image/video/audio) | ✅ | `Picture` for images, `GtkVideo` (GStreamer) for audio and video, with GTK's own transport controls |
+| PDF viewer | ❌ | Hands the file to the system document viewer rather than shipping poppler |
+| Hex viewer | ✅ | Core `HexDump` formatter; the viewer renders the first 64 KB |
+| File-tree context menu ops | ✅ | Right-click popover: new file/folder, rename, duplicate, copy path, open folder, revision/commit history, delete. FS work is core `FileOps`; delete uses GIO's trash |
+| Editor backgrounds (white/sepia/dark) | ✅ | CSS classes on the source view |
+| Multi-window | ⬜ | macOS opens folders/files in new windows; Linux has one window |
 | Animated background patterns | ❌ (for now) | macOS-distinctive; revisit after parity elsewhere |
 | Accent theming per-element | ❌ (for now) | GNOME accent colors exist system-wide; revisit |
 | Glass mode | ❌ | macOS-distinctive (window-server refraction) |
 | iCloud preference sync | ❌ | No equivalent; Linux uses local state only |
-| Zen mode | ⬜ | Hide sidebar + tab strip (`OverlaySplitView.visible`, collapse toolbar); fullscreen optional |
+| Zen mode | ✅ | Hides sidebar, tab strip, and header bar; Escape or the floating button leaves it |
 
-## 3. Suggested porting order
+## 3. What's left
 
-1. **Tabs to parity** (dirty dots, close buttons, preview semantics,
-   unsaved-changes dialog — `AlertDialog`) and **sidebar context menu**
-   (move pure-FS ops into core first).
-2. **Session restore + recents** (unblocks daily-driver use).
-3. **Minimap (`GtkSourceMap`) + status pill + word wrap** (editor feel).
-4. **Search palette** (double-shift, file/line jump).
-5. **Revision history + commit history** (core is done; UI only).
-6. **Branch popover** (checkout/create).
-7. **Readers** (markdown, asciidoc via WebKitGTK).
-8. **Preferences dialog**, then viewers (image/audio/video/hex/pdf).
+1. **Internal drag & drop** in the file tree (move within the workspace).
+2. **Multi-window** — window-per-folder plus a `SavedWindows`-style snapshot list.
+3. **AsciiDoc reader** (WebKitGTK, sharing `Resources/asciidoctor/`).
+4. **Folder-browse mode** (`.`) in the search palette.
+5. **Richer media metadata** in the status pill (macOS shows pixel size / depth /
+   duration / artist; Linux shows format + size).
+6. **Live file-system watching** so the tree refreshes without a manual reload.
 
 ## 4. Engineering conventions (see also `CLAUDE.md` here)
 

@@ -2,20 +2,40 @@
 
 GTK4/libadwaita front end for the Minimalist text editor, sharing the
 [`MinimalistCore`](../MinimalistCore) model layer with the macOS app.
-Built with [Adwaita for Swift](https://git.aparoksha.dev/aparoksha/adwaita-swift)
-and [CodeEditor](https://git.aparoksha.dev/aparoksha/codeeditor)
-(GtkSourceView).
+Built with [Adwaita for Swift](https://git.aparoksha.dev/aparoksha/adwaita-swift),
+with the editor written directly against GtkSourceView (via the
+[CodeEditor](https://git.aparoksha.dev/aparoksha/codeeditor) package's
+system-library target).
 
-## v1 scope
+## What it does
 
-- File-tree sidebar (expand/collapse, hides `.minimal/`)
-- Tabs, editor with syntax highlighting + line numbers (GtkSourceView)
-- Open file / open folder / new untitled / save / save-as (Ctrl+O /
-  Ctrl+Shift+O / Ctrl+N / Ctrl+S), close tab (Ctrl+W)
-- Git branch display for the open folder (libgit2, shared `GitService`)
+The Linux app tracks the macOS one feature-for-feature, in GNOME idioms
+(see [PORTING.md](PORTING.md) for the full parity matrix):
 
-Not yet ported: media viewers, markdown/asciidoc readers, revision
-history, zen mode, minimap, preferences, unsaved-changes prompts.
+- File-tree sidebar: compacted `parent.child` chains, the same colored
+  file-type monograms as macOS, right-click menu (new file/folder,
+  rename, duplicate, copy path, delete to trash, revision & commit
+  history), and drag-and-drop import
+- Tabs with dirty dots, close buttons, italic single-slot preview tabs,
+  reorder (Ctrl+Alt+←/→), and an unsaved-changes prompt on close
+- GtkSourceView editor: syntax highlighting, line numbers, **minimap**
+  (`GtkSourceMap`), word wrap, per-file indentation and line endings,
+  light/dark syntax themes, editor backgrounds, and completion from the
+  document plus the language's keywords
+- Status pill (language · indentation · line endings) with a popover to
+  change any of them, or set them as the default
+- Double-shift (or Ctrl+P) search palette: fuzzy file search, `:line`
+  jumps, in-file matches, recents
+- Git: branch pill with checkout / create-branch, per-file commit
+  history with patches, and the app's own `.minimal/` revision history
+  (autosaves + save/quit commits) with preview and revert
+- Markdown reader view, image / audio / video viewers, hex viewer
+- Zen mode (Ctrl+Alt+Z), preferences, and session restore (folder, tabs,
+  active tab, recents) under `~/.local/state/m-txt/`
+
+Not yet ported: AsciiDoc reader, multi-window, internal drag-to-move in
+the tree, and the macOS-only extras (glass mode, animated editor
+backgrounds, iCloud sync). PDFs open in the system document viewer.
 
 ## Requirements
 

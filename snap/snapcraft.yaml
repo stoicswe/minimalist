@@ -3,6 +3,11 @@
 # Base is core26 (Ubuntu 26.04 LTS) because the UI toolkit needs
 # libadwaita >= 1.7 — core24's 1.5 is too old.
 #
+# Known confinement gap: "Delete…" uses GIO's trash, which needs
+# ~/.local/share/Trash — the `home` interface doesn't reach hidden
+# directories, so inside the snap the app reports that it couldn't
+# trash the file. The gnome extension (below) fixes this too.
+#
 # TODO: switch to `extensions: [gnome]` once the gnome extension
 # supports core26 (https://github.com/canonical/snapcraft/issues/6185).
 # That replaces the hand-staged GTK stack, the launcher script's env
@@ -40,6 +45,7 @@ apps:
       - x11
       - opengl
       - gsettings
+      - audio-playback
       - home
       - removable-media
       - network
@@ -72,6 +78,11 @@ parts:
       - shared-mime-info
       - libgdk-pixbuf2.0-bin
       - libssl3t64
+      # GTK's video/audio widget plays through GStreamer.
+      - gstreamer1.0-gl
+      - gstreamer1.0-plugins-base
+      - gstreamer1.0-plugins-good
+      - gstreamer1.0-libav
     override-pull: |
       craftctl default
       craftctl set version="$(git -C "$CRAFT_PART_SRC" describe --tags --always 2>/dev/null || echo dev)"

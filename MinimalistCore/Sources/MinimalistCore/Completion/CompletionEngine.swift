@@ -69,12 +69,15 @@ public enum CompletionEngine {
 
 /// Per-language keyword lists. Kept compact — the document-derived
 /// identifiers handle everything else.
-enum LanguageKeywords {
+public enum LanguageKeywords {
     /// Returns the keyword set for `language`. Each set is a static
     /// constant — allocated once at first reference, returned by
     /// reference every call after, so dispatching by language string is
     /// effectively free even on a hot path.
-    static func list(for language: String) -> Set<String> {
+    ///
+    /// Public because the Linux front end feeds these to GtkSourceView's
+    /// completion provider rather than rendering ghost text itself.
+    public static func list(for language: String) -> Set<String> {
         switch language.lowercased() {
         case "swift":
             return swift

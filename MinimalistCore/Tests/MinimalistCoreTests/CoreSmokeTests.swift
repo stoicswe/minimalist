@@ -166,3 +166,117 @@ private func makeTempDir() throws -> URL {
         #expect(onDisk == "a\r\nb\r\nc\r\n")
     }
 }
+
+@Suite struct FileOpsTests {
+
+    @Test func createRenameDuplicateMove() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let file = try FileOps.createFile(named: "notes.txt", in: dir)
+        #expect(FileManager.default.fileExists(atPath: file.path))
+
+        // A second file with the same name is refused, not silently overwritten.
+        #expect(throws: FileOps.OpError.self) {
+            try FileOps.createFile(named: "notes.txt", in: dir)
+        }
+
+        let renamed = try FileOps.rename(file, to: "todo.txt")
+        #expect(renamed.lastPathComponent == "todo.txt")
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+
+        let copy = try FileOps.duplicate(renamed)
+        #expect(copy.lastPathComponent == "todo copy.txt")
+        let secondCopy = try FileOps.duplicate(renamed)
+        #expect(secondCopy.lastPathComponent == "todo copy 2.txt")
+
+        let folder = try FileOps.createFolder(named: "sub", in: dir)
+        let moved = try FileOps.move(renamed, into: folder)
+        #expect(moved.path == folder.appendingPathComponent("todo.txt").path)
+        // Moving into the folder it already lives in is a no-op.
+        #expect(try FileOps.move(moved, into: folder).path == moved.path)
+        // A folder can't be moved inside itself.
+        #expect(throws: FileOps.OpError.self) {
+            try FileOps.move(folder, into: folder)
+        }
+    }
+}
+
+@Suite struct FileTypeBadgeTests {
+
+    @Test func badgesResolveByNameThenExtension() {
+        #expect(FileTypeBadge.badge(forName: "Package.swift").letter == "SW")
+        #expect(FileTypeBadge.badge(forName: "main.swift").letter == "SW")
+        #expect(FileTypeBadge.badge(forName: "README.md").letter == "RM")
+        #expect(FileTypeBadge.badge(forName: "guide.md").letter == "MD")
+        // Unknown extensions fall back to a two-letter grey chip.
+        #expect(FileTypeBadge.badge(forName: "archive.qqq").letter == "QQ")
+        #expect(FileTypeBadge.badge(forName: "noextension").letter == "")
+        #expect(FileTypeBadge.badge(forName: "main.swift").hex == "#ce6e54")
+    }
+}
+
+@Suite struct WorkspaceSearchTests {
+
+    @Test func parsesLineSuffixAndRanksNames() throws {
+        #expect(WorkspaceSearch.parseQuery("view.swift:42").line == 42)
+        #expect(WorkspaceSearch.parseQuery("view.swift:42").text == "view.swift")
+        #expect(WorkspaceSearch.parseQuery("view.swift").line == nil)
+        // A trailing colon without digits isn't a line jump.
+        #expect(WorkspaceSearch.parseQuery("http://x").line == nil)
+
+        let urls = [
+            URL(fileURLWithPath: "/w/MainView.swift"),
+            URL(fileURLWithPath: "/w/View.swift"),
+            URL(fileURLWithPath: "/w/deep/nested/other.txt"),
+        ]
+        let ranked = WorkspaceSearch.rank(candidates: urls, query: "view")
+        #expect(ranked.first?.lastPathComponent == "View.swift")
+        #expect(ranked.count == 2)
+    }
+
+    @Test func skipsHiddenAndBuildDirectories() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("node_modules"),
+            withIntermediateDirectories: true
+        )
+        try "x".write(
+            to: dir.appendingPathComponent("node_modules/dep.js"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "x".write(to: dir.appendingPathComponent("app.swift"), atomically: true, encoding: .utf8)
+
+        let files = WorkspaceSearch.files(under: dir)
+        #expect(files.map(\.lastPathComponent) == ["app.swift"])
+
+        let hits = WorkspaceSearch.lineMatches(query: "beta", in: "alpha\nbeta\ngamma\n")
+        #expect(hits.count == 1)
+        #expect(hits.first?.line == 2)
+    }
+}
+
+@Suite struct HexDumpTests {
+
+    @Test func formatsOffsetsHexAndAscii() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let url = dir.appendingPathComponent("blob.bin")
+        try Data([0x7F, 0x45, 0x4C, 0x46, 0x41, 0x00]).write(to: url)
+
+        let result = HexDump.dump(url: url)
+        #expect(!result.truncated)
+        #expect(result.totalSize == 6)
+        let line = try #require(result.text.components(separatedBy: "\n").first)
+        #expect(line.hasPrefix("00000000"))
+        #expect(line.contains("7f 45 4c 46 41 00"))
+        // Non-printable bytes render as dots in the ASCII column.
+        #expect(line.hasSuffix(".ELFA."))
+        #expect(HexDump.magic(url: url) == "ELF")
+        #expect(HexDump.byteCount(2_048) == "2.0 KB")
+    }
+}

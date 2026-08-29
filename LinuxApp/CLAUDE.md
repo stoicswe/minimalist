@@ -31,16 +31,31 @@ Requirements (hard, discovered the annoying way):
 
 ## Architecture
 
-- `Sources/Minimalist/Main.swift` — `@main` App + Window scene.
-- `Sources/Minimalist/MainView.swift` — the whole v1 UI + interaction
-  logic (header bar, sidebar tree, tab strip, editor, dialogs).
+- `Sources/Minimalist/Main.swift` — `@main` App + Window scene, window
+  shortcuts, and the close hook that writes the session.
+- `Sources/Minimalist/MainView.swift` — the window shell: all `@State`,
+  the split view, and the dialog stack. Its areas live in extensions:
+  `MainView+HeaderBar/Sidebar/Content/Actions/Search/History/`
+  `Preferences/Style.swift`.
 - `Sources/Minimalist/DocumentStore.swift` — `@MainActor` singleton that
-  owns `Document`/`FileNode` instances and per-document baselines, plus
-  the `onMain {}` bridge (see below). Adwaita `@State` holds value
-  snapshots (`FileRow`, `EditorTab`); reference-typed model state lives
-  here.
+  owns `Document`/`FileNode`/`RevisionTracker`, recents, settings, and
+  the session snapshot, plus the `onMain {}` bridge (see below). Adwaita
+  `@State` holds value snapshots (`FileRow`, `EditorTab`).
+- `Sources/Minimalist/Editor/SourceEditor.swift` — the editor widget:
+  GtkSourceView + `GtkSourceMap` written against the C API (the upstream
+  `CodeEditor` widget only does text + line numbers). Keeps one buffer
+  per open document so undo, cursor, and scroll survive tab switches.
+- `Sources/Minimalist/Support/GTKBridge.swift` — raw GTK the toolkit
+  doesn't wrap: typed signal connections, the key controller behind ⇧⇧,
+  right-click / double-click gestures, GIO trash, URI launching.
+- `Sources/Minimalist/State/AppState.swift` — settings
+  (`~/.config/m-txt/settings.json`) and session
+  (`~/.local/state/m-txt/session.json`).
+- `Sources/Minimalist/Viewers/` — `MarkdownRenderer` (Markdown → Pango
+  markup for the reader view) and `MediaPlayer` (GtkVideo).
 - `Sources/Minimalist/LanguageMap.swift` — core language ids
-  (highlight.js naming) → GtkSourceView `Language` cases.
+  (highlight.js naming) → GtkSourceView language ids, resolved against
+  what the installed library actually ships.
 - `snap-assets/minimalist-launch` — snap runtime env plumbing; delete
   when the gnome snapcraft extension supports core26.
 
@@ -67,6 +82,20 @@ values you pass in/out `Sendable` snapshots.
   pattern. Also `aparoksha/meta` (the `@State`/`Binding`/`Signal` layer).
 - `Signal()` + `.signal()` triggers `fileImporter` / `folderImporter` /
   `fileExporter` dialogs (portal-backed).
+- **`@State` writes inside `onAppear` are discarded.** `onAppear` runs
+  while the view's storage is still being built, so the initial values
+  win. Defer the work one main-loop turn — `.onAppear { Idle { … } }` —
+  as `MainView` does for session restore.
+- **Each `@State` write re-renders immediately.** Two related writes in
+  one handler produce an intermediate render with mismatched values, so
+  don't split one fact across two `@State`s (the editor binds straight
+  through to its `Document` rather than mirroring the text in view
+  state, which is why).
+- **`ViewStorage(pointer)` must hold an `OpaquePointer`.** Its
+  `opaquePointer` accessor is a conditional cast, so storing a typed
+  `UnsafeMutablePointer` silently yields `nil` later — call `.opaque()`
+  when storing, `.cast()` when calling back into C. Which of the two a
+  GTK function wants varies by type; the compiler is the oracle.
 
 ### Shared-core discipline
 
