@@ -19,3 +19,4 @@ Resources/Assets.xcassets/AppIcon.appiconset/*.png
 # Build artifacts
 *.xcarchive
 *.zip
+.build-linux*/

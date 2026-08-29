@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name={m.txt}
+Comment=The text editor for the rest of us
+Exec=m-txt %F
+Icon=${SNAP}/meta/gui/icon.svg
+Terminal=false
+Categories=Utility;TextEditor;Development;
+MimeType=text/plain;text/markdown;
+StartupWMClass=com.stoicswe.minimalist

@@ -1,0 +1,23 @@
+#!/bin/sh
+# Runtime plumbing the gnome snapcraft extension would normally provide.
+# Remove this script (and the hand-staged GTK stack) once the extension
+# supports core26: https://github.com/canonical/snapcraft/issues/6185
+
+triplet=$(ls -d "$SNAP"/usr/lib/*-linux-gnu 2>/dev/null | head -n 1)
+export LD_LIBRARY_PATH="$triplet${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export GSETTINGS_SCHEMA_DIR="$SNAP/usr/share/glib-2.0/schemas"
+export XDG_DATA_DIRS="$SNAP/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+# gdk-pixbuf loader cache references build-time paths; regenerate once
+# per revision against the snap's own paths.
+loaders="$triplet/gdk-pixbuf-2.0/2.10.0/loaders"
+if [ -d "$loaders" ]; then
+    export GDK_PIXBUF_MODULEDIR="$loaders"
+    cache="${SNAP_USER_COMMON:-/tmp}/pixbuf-loaders-${SNAP_REVISION:-0}.cache"
+    if [ ! -f "$cache" ] && [ -x "$SNAP/usr/bin/gdk-pixbuf-query-loaders" ]; then
+        "$SNAP/usr/bin/gdk-pixbuf-query-loaders" > "$cache" 2>/dev/null || true
+    fi
+    [ -f "$cache" ] && export GDK_PIXBUF_MODULE_FILE="$cache"
+fi
+
+exec "$SNAP/usr/bin/m-txt" "$@"
