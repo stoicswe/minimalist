@@ -3,9 +3,11 @@ import CodeEditor
 import Foundation
 import MinimalistCore
 
-/// v1 shell: header bar with file actions, sidebar file tree, tab strip,
-/// GtkSourceView editor. Text documents only — media viewers, revision
-/// history, and zen mode stay macOS-only for now.
+/// v1 shell styled after the macOS app: sidebar with project header and
+/// branch pill, text-tab strip with a pill highlight on the active tab,
+/// GtkSourceView editor with a floating status pill and sidebar toggle.
+/// Text documents only — media viewers, revision history, and zen mode
+/// stay macOS-only for now.
 struct MainView: View {
 
     var app: AdwaitaApp
@@ -42,28 +44,33 @@ struct MainView: View {
         OverlaySplitView(visible: $sidebarVisible) {
             sidebar
         } content: {
-            content
+            contentPane
         }
         .topToolbar {
             HeaderBar {
-                Button("Open…") { openFileSignal.signal() }
+                Button(icon: .custom(name: "document-open-symbolic")) { openFileSignal.signal() }
                     .keyboardShortcut("o".ctrl())
-                Button("Folder…") { openFolderSignal.signal() }
+                    .flat()
+                Button(icon: .custom(name: "folder-open-symbolic")) { openFolderSignal.signal() }
                     .keyboardShortcut("o".ctrl().shift())
-                Button("New") { newUntitled() }
+                    .flat()
+                Button(icon: .custom(name: "document-new-symbolic")) { newUntitled() }
                     .keyboardShortcut("n".ctrl())
+                    .flat()
             } end: {
-                branchLabel
-                Button("Save") { saveActive() }
+                Button(icon: .custom(name: "document-save-symbolic")) { saveActive() }
                     .keyboardShortcut("s".ctrl())
-                    .style("suggested-action")
-                Button("Close Tab") { closeActiveTab() }
+                    .flat()
+                Button(icon: .custom(name: "window-close-symbolic")) { closeActiveTab() }
                     .keyboardShortcut("w".ctrl())
+                    .flat()
             }
             .headerBarTitle {
                 WindowTitle(subtitle: folderName, title: windowTitle)
             }
+            .style("flat")
         }
+        .css { Self.appCSS }
         .fileImporter(open: $openFileSignal, onOpen: { url in openFile(url) })
         .folderImporter(open: $openFolderSignal, onOpen: { url in openFolder(url) })
         .fileExporter(
@@ -73,44 +80,100 @@ struct MainView: View {
         )
     }
 
-    // MARK: - Subviews
+    // MARK: - Sidebar
 
-    @ViewBuilder private var branchLabel: Body {
-        if !branch.isEmpty {
-            Text("⎇ \(branch)")
-                .style("dim-label")
+    @ViewBuilder private var sidebar: Body {
+        VStack {
+            projectHeader
+            ScrollView {
+                if rows.isEmpty {
+                    Text(folderName.isEmpty ? "No folder open" : "Empty folder")
+                        .dimLabel()
+                        .padding(20)
+                } else {
+                    List(rows, id: \.id, selection: nil) { row in
+                        rowView(row)
+                    }
+                    .sidebarStyle()
+                }
+            }
+            .hscrollbarPolicy(.never)
+            .vexpand()
         }
     }
 
-    @ViewBuilder private var sidebar: Body {
-        ScrollView {
-            if rows.isEmpty {
-                Text(folderName.isEmpty ? "No folder open" : "Empty folder")
-                    .style("dim-label")
-                    .padding(20)
-            } else {
-                List(rows, id: \.id, selection: nil) { row in
-                    rowView(row)
-                }
-                .sidebarStyle()
+    @ViewBuilder private var projectHeader: Body {
+        HStack(spacing: 8) {
+            Text(folderName.isEmpty ? "{m.txt}" : folderName)
+                .heading()
+            if !branch.isEmpty {
+                Text("⎇ \(branch)")
+                    .caption()
+                    .style("branch-pill")
             }
         }
-        .hscrollbarPolicy(.never)
+        .halign(.start)
+        .padding(12)
     }
 
     @ViewBuilder private func rowView(_ row: FileRow) -> Body {
-        Button(rowLabel(row)) { rowTapped(row) }
-            .style("flat")
-            .halign(.start)
-            .padding(row.depth * 16, [.leading])
+        Button(row.name) { rowTapped(row) }
+            .child {
+                HStack(spacing: 8) {
+                    if row.isDirectory {
+                        Image()
+                            .iconName(row.isExpanded ? "pan-down-symbolic" : "pan-end-symbolic")
+                            .dimLabel()
+                        Image()
+                            .iconName("folder-symbolic")
+                            .dimLabel()
+                    } else {
+                        Image()
+                            .iconName(Self.fileIcon(for: row.name))
+                            .dimLabel()
+                    }
+                    Text(row.name)
+                        .dimLabel(row.name.hasPrefix("."))
+                }
+                .halign(.start)
+                .padding(row.depth * 14, [.leading])
+            }
+            .flat()
+            .style("tree-row")
+            .style("row-active", active: !row.isDirectory && row.id == activeTabID)
     }
 
-    private func rowLabel(_ row: FileRow) -> String {
-        guard row.isDirectory else { return row.name }
-        return (row.isExpanded ? "▾ " : "▸ ") + row.name
+    /// Symbolic icon for a file row, by extension. Sticks to names that
+    /// ship with adwaita-icon-theme so nothing renders as image-missing.
+    private static func fileIcon(for name: String) -> String {
+        switch (name as NSString).pathExtension.lowercased() {
+        case "png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico":
+            return "image-x-generic-symbolic"
+        case "mp3", "wav", "flac", "ogg", "m4a":
+            return "audio-x-generic-symbolic"
+        case "mp4", "mkv", "mov", "webm", "avi":
+            return "video-x-generic-symbolic"
+        case "zip", "tar", "gz", "xz", "bz2", "7z", "rar":
+            return "package-x-generic-symbolic"
+        case "sh", "bash", "zsh", "fish":
+            return "utilities-terminal-symbolic"
+        default:
+            return "text-x-generic-symbolic"
+        }
     }
 
-    @ViewBuilder private var content: Body {
+    // MARK: - Content
+
+    @ViewBuilder private var contentPane: Body {
+        VStack {
+            editorArea
+        }
+        .overlay {
+            overlayControls
+        }
+    }
+
+    @ViewBuilder private var editorArea: Body {
         if tabs.isEmpty {
             StatusPage(
                 "No Open Files",
@@ -119,14 +182,52 @@ struct MainView: View {
             )
         } else {
             VStack {
-                ToggleGroup(selection: tabSelection, values: tabs, id: \.id, label: \.title)
-                    .padding(6)
+                tabStrip
                 ScrollView {
                     codeEditor
                 }
                 .vexpand()
             }
         }
+    }
+
+    @ViewBuilder private var tabStrip: Body {
+        ForEach(tabs, id: \.id) { tab in
+            Button(tabTitle(tab)) { activateTab(tab.id) }
+                .style("tab-item")
+                .style("tab-active", active: tab.id == activeTabID)
+        }
+        .orientation(.horizontal)
+        .halign(.start)
+        .padding(6)
+    }
+
+    private func tabTitle(_ tab: EditorTab) -> String {
+        (tab.id == activeTabID && isDirty ? "• " : "") + tab.title
+    }
+
+    @ViewBuilder private var overlayControls: Body {
+        Button(icon: .custom(name: "sidebar-show-symbolic")) { sidebarVisible.toggle() }
+            .circular()
+            .style("float-btn")
+            .halign(.end)
+            .valign(.start)
+            .padding(14, [.top, .trailing])
+        if let tab = activeTab {
+            Text(statusLine(for: tab))
+                .caption()
+                .monospace()
+                .style("status-pill")
+                .halign(.end)
+                .valign(.end)
+                .padding(14, [.bottom, .trailing])
+        }
+    }
+
+    private func statusLine(for tab: EditorTab) -> String {
+        let language = tab.languageID.isEmpty ? "PLAIN TEXT" : tab.languageID.uppercased()
+        let lineEnding = editorText.contains("\r\n") ? "CRLF" : "LF"
+        return "\(language)  |  \(lineEnding)"
     }
 
     private var codeEditor: CodeEditor {
@@ -140,13 +241,51 @@ struct MainView: View {
         return editor
     }
 
-    private var tabSelection: Binding<String> {
-        .init {
-            activeTabID
-        } set: { newValue in
-            activateTab(newValue)
-        }
+    // MARK: - Styling
+
+    /// Styling for the parts of the macOS design that have no stock
+    /// libadwaita equivalent: pill tabs, the branch pill, tree rows, and
+    /// the floating editor controls.
+    private static let appCSS = """
+    .branch-pill {
+        background-color: alpha(@accent_bg_color, 0.15);
+        color: @accent_color;
+        border-radius: 999px;
+        padding: 2px 10px;
     }
+    button.tab-item {
+        background: none;
+        border-radius: 10px;
+        padding: 3px 14px;
+        margin: 0 2px;
+        min-height: 0;
+        color: alpha(@window_fg_color, 0.7);
+    }
+    button.tab-item.tab-active {
+        background-color: alpha(@window_fg_color, 0.08);
+        color: @window_fg_color;
+    }
+    button.tree-row {
+        border-radius: 8px;
+        padding: 2px 8px;
+        min-height: 0;
+    }
+    button.tree-row.row-active {
+        background-color: alpha(@window_fg_color, 0.1);
+    }
+    .status-pill {
+        background-color: mix(@view_bg_color, @view_fg_color, 0.05);
+        border: 1px solid alpha(@view_fg_color, 0.1);
+        border-radius: 999px;
+        padding: 5px 14px;
+        box-shadow: 0 2px 6px alpha(black, 0.15);
+    }
+    button.float-btn {
+        background-color: mix(@view_bg_color, @view_fg_color, 0.05);
+        border: 1px solid alpha(@view_fg_color, 0.1);
+        box-shadow: 0 2px 6px alpha(black, 0.15);
+    }
+    """
 
     // MARK: - Folder & sidebar actions
 
