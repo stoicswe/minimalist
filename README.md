@@ -9,8 +9,18 @@ The text editor for the rest of us. No AI, no excess, no plugins or agents.
   <img alt="Minimalist editor" src="docs/screenshots/light_mode.png">
 </picture>
 
-<a href="https://apps.apple.com/us/app/m-txt-minimal-text-editor/id6764609511?mt=12&itscg=30200&itsct=apps_box_badge&mttnsubad=6764609511" style="display: inline-block;"> <img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us?releaseDate=1787875200" alt="Download on the App Store" style="width: 244px; height: 82px; vertical-align: middle; object-fit: contain;" /></a>
-    
+<!-- GitHub strips style= attributes from READMEs, so badge sizing must
+     use height/width HTML attributes; matching heights keeps the two
+     store badges symmetric. -->
+<p align="center">
+  <a href="https://apps.apple.com/us/app/m-txt-minimal-text-editor/id6764609511?mt=12&itscg=30200&itsct=apps_box_badge&mttnsubad=6764609511">
+    <img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us?releaseDate=1787875200" alt="Download on the Mac App Store" height="56" />
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://snapcraft.io/m-txt">
+    <img src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" alt="Get it from the Snap Store" height="56" />
+  </a>
+</p>
 
 A minimalist text editor for macOS. SwiftUI on top and native AppKit running in the background for a simple user interface.
 
