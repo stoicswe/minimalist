@@ -50,7 +50,10 @@ jobs:
   snap:
     name: Snap (${{ matrix.arch }})
     # Snap builds are slow; run them on branch pushes only, not PRs.
+    # `needs: build` keeps a broken build or a failing test from ever
+    # reaching the store.
     if: github.event_name == 'push'
+    needs: build
     strategy:
       fail-fast: false
       matrix:
@@ -60,6 +63,19 @@ jobs:
           - arch: arm64
             runner: ubuntu-26.04-arm
     runs-on: ${{ matrix.runner }}
+    # Store credentials, exported with:
+    #
+    #   snapcraft export-login --snaps m-txt \
+    #     --acls package_access,package_push,package_update,package_release \
+    #     --expires 2027-01-01 -
+    #
+    # and pasted whole into the repository secret below. They expire —
+    # when the publish step starts failing with an authentication error,
+    # re-export and update the secret. Publishing is skipped entirely
+    # when the secret is missing (forks, or before the store is set up),
+    # so the snap still builds and uploads as a workflow artifact.
+    env:
+      SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -77,3 +93,23 @@ jobs:
           name: m-txt-snap-${{ matrix.arch }}
           path: ${{ steps.snapcraft.outputs.snap }}
           if-no-files-found: error
+
+      # main is the beta channel; release/* branches go to stable. To
+      # keep beta users from sitting on an older revision than stable
+      # (the store won't roll them forward on its own), change the
+      # release-branch channel to "stable,beta".
+      - name: Choose store channel
+        id: channel
+        run: |
+          if [[ "$GITHUB_REF" == refs/heads/release/* ]]; then
+            echo "name=stable" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=beta" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to the Snap Store
+        if: env.SNAPCRAFT_STORE_CREDENTIALS != ''
+        uses: snapcore/action-publish@v1
+        with:
+          snap: ${{ steps.snapcraft.outputs.snap }}
+          release: ${{ steps.channel.outputs.name }}

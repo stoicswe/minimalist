@@ -43,38 +43,20 @@ extension MainView {
     }
 
     @ViewBuilder var revisionHistory: Body {
-        HStack(spacing: 0) {
+        // A split view rather than a hand-built HStack: it owns the pane
+        // widths and the divider, which a Clamp + Separator pair can't do
+        // inside a dialog.
+        OverlaySplitView(visible: .init { true } set: { _ in }) {
             VStack {
                 ScrollView {
                     if revisionRows.isEmpty {
                         Text("No revisions recorded yet")
+                            .wrap()
                             .dimLabel()
                             .padding(20)
                     } else {
                         List(revisionRows, id: \.id, selection: nil) { row in
-                            Button(row.title) {
-                                revisionSelection = row.id
-                                historyPreview = revisionContent(row.id)
-                            }
-                            .child {
-                                HStack(spacing: 8) {
-                                    Image()
-                                        .iconName(
-                                            row.isCommit
-                                                ? "object-select-symbolic"
-                                                : "document-open-recent-symbolic"
-                                        )
-                                        .dimLabel()
-                                    VStack(spacing: 0) {
-                                        Text(row.title).ellipsize().halign(.start)
-                                        Text(row.subtitle).caption().dimLabel().halign(.start)
-                                    }
-                                }
-                                .halign(.start)
-                            }
-                            .flat()
-                            .style("tree-row")
-                            .style("row-active", active: row.id == revisionSelection)
+                            revisionRowView(row)
                         }
                         .sidebarStyle()
                     }
@@ -84,22 +66,55 @@ extension MainView {
                     .destructive()
                     .padding(8)
             }
-            .frame(maxWidth: 300)
-            Separator()
-            ScrollView {
-                Text(historyPreview)
-                    .selectable()
-                    .xalign(0)
-                    .monospace()
-                    .halign(.start)
-                    .valign(.start)
-                    .padding(12)
-            }
-            .hexpand()
+        } content: {
+            historyPreviewPane
         }
+        .sidebarWidthFraction(0.38)
+        .minSidebarWidth(240)
+        .maxSidebarWidth(360)
+        .pinSidebar()
         .topToolbar {
             HeaderBar.empty()
         }
+    }
+
+    @ViewBuilder private func revisionRowView(_ row: RevisionRow) -> Body {
+        Button(row.title) {
+            revisionSelection = row.id
+            historyPreview = revisionContent(row.id)
+        }
+        .child {
+            HStack(spacing: 8) {
+                Image()
+                    .iconName(row.isCommit ? "object-select-symbolic" : "document-open-recent-symbolic")
+                    .dimLabel()
+                VStack(spacing: 0) {
+                    Text(row.title).ellipsize().halign(.start)
+                    Text(row.subtitle).ellipsize().caption().dimLabel().halign(.start)
+                }
+            }
+            .halign(.start)
+        }
+        .flat()
+        .style("tree-row")
+        .style("row-active", active: row.id == revisionSelection)
+    }
+
+    /// The right-hand pane shared by both history dialogs: the selected
+    /// revision's contents, or the selected commit's patch.
+    @ViewBuilder private var historyPreviewPane: Body {
+        ScrollView {
+            Text(historyPreview.isEmpty ? "Nothing to preview" : historyPreview)
+                .selectable()
+                .xalign(0)
+                .monospace()
+                .halign(.start)
+                .valign(.start)
+                .dimLabel(historyPreview.isEmpty)
+                .padding(12)
+        }
+        .vexpand()
+        .hexpand()
     }
 
     private func revisionContent(_ id: String) -> String {
@@ -162,10 +177,11 @@ extension MainView {
     }
 
     @ViewBuilder var commitHistory: Body {
-        HStack(spacing: 0) {
+        OverlaySplitView(visible: .init { true } set: { _ in }) {
             ScrollView {
                 if commitRows.isEmpty {
                     Text("No commits touch this file")
+                        .wrap()
                         .dimLabel()
                         .padding(20)
                 } else {
@@ -188,19 +204,14 @@ extension MainView {
                     .sidebarStyle()
                 }
             }
-            .frame(maxWidth: 320)
-            Separator()
-            ScrollView {
-                Text(historyPreview)
-                    .selectable()
-                    .xalign(0)
-                    .monospace()
-                    .halign(.start)
-                    .valign(.start)
-                    .padding(12)
-            }
-            .hexpand()
+            .vexpand()
+        } content: {
+            historyPreviewPane
         }
+        .sidebarWidthFraction(0.42)
+        .minSidebarWidth(260)
+        .maxSidebarWidth(400)
+        .pinSidebar()
         .topToolbar {
             HeaderBar.empty()
         }

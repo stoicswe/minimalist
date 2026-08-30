@@ -11,13 +11,12 @@ extension MainView {
             }
             editorArea
         }
+        // One `.overlay` only: calling it twice replaces the overlay
+        // content rather than nesting, and every child must carry its own
+        // alignment — an unaligned one fills the pane and swallows the
+        // clicks and scroll events meant for the tabs and the editor.
         .overlay {
             overlayControls
-        }
-        .overlay {
-            if searchVisible {
-                searchPalette
-            }
         }
     }
 
@@ -189,9 +188,44 @@ extension MainView {
 
     // MARK: - Floating controls
 
+    /// Every overlay child is an always-present container carrying its
+    /// own alignment. A bare `if` at this level becomes a `GtkStack` that
+    /// fills the pane — invisible, but it swallows the clicks and scroll
+    /// events meant for the tabs and the editor underneath.
     @ViewBuilder var overlayControls: Body {
-        // The macOS app floats its reader / minimap toggles over the
-        // editor's top-right corner; so does this one.
+        floatingToggles
+        VStack {
+            if zenMode {
+                Button(icon: .custom(name: "view-restore-symbolic")) { zenMode = false }
+                    .circular()
+                    .style("float-btn")
+                    .tooltip("Leave zen mode")
+            }
+        }
+        .halign(.end)
+        .valign(.start)
+        .padding(14, [.top, .trailing])
+        VStack {
+            if let tab = activeTab {
+                statusPill(for: tab)
+            }
+        }
+        .halign(.end)
+        .valign(.end)
+        .padding(14, [.bottom, .trailing])
+        VStack {
+            if searchVisible {
+                searchPalette
+            }
+        }
+        .halign(.center)
+        .valign(.start)
+        .padding(60, [.top])
+    }
+
+    /// The macOS app floats its reader / minimap toggles over the
+    /// editor's top-right corner; so does this one.
+    @ViewBuilder var floatingToggles: Body {
         HStack(spacing: 8) {
             if activeTab?.supportsReader == true {
                 Button(icon: .custom(name: "view-paged-symbolic")) { toggleReader() }
@@ -214,18 +248,6 @@ extension MainView {
         .halign(.end)
         .valign(.start)
         .padding(14, [.top, .trailing])
-        if zenMode {
-            Button(icon: .custom(name: "view-restore-symbolic")) { zenMode = false }
-                .circular()
-                .style("float-btn")
-                .halign(.end)
-                .valign(.start)
-                .padding(14, [.top, .trailing])
-                .tooltip("Leave zen mode")
-        }
-        if let tab = activeTab {
-            statusPill(for: tab)
-        }
     }
 
     @ViewBuilder func statusPill(for tab: EditorTab) -> Body {
@@ -237,9 +259,6 @@ extension MainView {
             }
             .flat()
             .style("status-pill")
-            .halign(.end)
-            .valign(.end)
-            .padding(14, [.bottom, .trailing])
             .popover(visible: $statusPopoverVisible) {
                 if tab.kind == .text {
                     documentOptions(for: tab)

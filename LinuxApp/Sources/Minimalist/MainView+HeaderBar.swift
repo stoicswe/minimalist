@@ -81,6 +81,7 @@ extension MainView {
                 .keyboardShortcut("comma".ctrl())
             MenuButton("Keyboard Shortcuts") { shortcutsVisible = true }
                 .keyboardShortcut("question".ctrl())
+            MenuButton("About \(AppInfo.name)") { aboutVisible = true }
         }
     }
 }

@@ -46,7 +46,8 @@ struct SourceEditor: AdwaitaWidget {
     var background: String?
 
     private static let viewKey = "source-view"
-    private static let mapKey = "source-map"
+    private static let mapKey = "minimap"
+    private static let minimapStateKey = "minimap-state"
     private static let buffersKey = "buffers"
     private static let scrollKey = "scroll-offsets"
     private static let currentKey = "current-document"
@@ -68,22 +69,26 @@ struct SourceEditor: AdwaitaWidget {
         let box = gtk_box_new(.GTK_ORIENTATION_HORIZONTAL, 0)
         let scroller = gtk_scrolled_window_new()
         let view = gtk_source_view_new()
-        let map = gtk_source_map_new()
+        let map = gtk_drawing_area_new()
 
         gtk_widget_set_hexpand(scroller, 1)
         gtk_widget_set_vexpand(scroller, 1)
         gtk_scrolled_window_set_child(scroller?.opaque(), view)
         gtk_box_append(box?.cast(), scroller)
         gtk_box_append(box?.cast(), map)
-        gtk_source_map_set_view(map?.cast(), view?.cast())
 
         gtk_text_view_set_monospace(view?.cast(), 1)
         gtk_widget_add_css_class(view, "editor-view")
         gtk_widget_add_css_class(map, "editor-map")
 
+        let minimap = MinimapState()
+        minimap.scroller = scroller?.opaque()
+        Self.attachMinimap(map, state: minimap, scroller: scroller?.opaque())
+
         let storage = ViewStorage(box?.opaque())
         storage.content[Self.viewKey] = [ViewStorage(view?.opaque())]
         storage.content[Self.mapKey] = [ViewStorage(map?.opaque())]
+        storage.fields[Self.minimapStateKey] = minimap
         storage.fields[Self.buffersKey] = [String: ViewStorage]()
         storage.fields[Self.scrollKey] = [String: Double]()
 
@@ -129,12 +134,70 @@ struct SourceEditor: AdwaitaWidget {
 
         guard updateProperties else { return }
 
+        syncMinimap(buffer: buffer, storage: storage)
         applyLanguage(to: buffer)
         applyScheme(to: buffer, storage: storage)
         applyViewProperties(view: view, storage: storage)
         applyScroll(view: view, storage: storage)
         applyKeywords(storage: storage)
         pruneBuffers(in: storage)
+    }
+
+    // MARK: - Minimap
+
+    /// Wire the drawing area's render callback, its scroll-position
+    /// redraws, and click / drag scrubbing.
+    private static func attachMinimap(
+        _ map: UnsafeMutablePointer<GtkWidget>?,
+        state: MinimapState,
+        scroller: OpaquePointer?
+    ) {
+        gtk_widget_set_size_request(map, 68, -1)
+        gtk_drawing_area_set_draw_func(
+            map?.cast(),
+            { area, context, width, height, data in
+                guard let data else { return }
+                let state = Unmanaged<MinimapState>.fromOpaque(data).takeUnretainedValue()
+                state.draw(widget: area?.cast(), context: context, width: width, height: height)
+            },
+            Unmanaged.passRetained(state).toOpaque(),
+            { data in
+                guard let data else { return }
+                Unmanaged<MinimapState>.fromOpaque(data).release()
+            }
+        )
+
+        let mapPointer = map?.opaque()
+        GTKBridge.onPress(mapPointer) { [weak state] _, y in
+            state?.scrollTo(y: y, height: Double(gtk_widget_get_height(map)))
+        }
+        GTKBridge.onDrag(mapPointer) { [weak state] _, y in
+            state?.scrollTo(y: y, height: Double(gtk_widget_get_height(map)))
+        }
+        if let adjustment = state.vadjustment() {
+            GTKBridge.onValueChanged(adjustment.opaque()) {
+                gtk_widget_queue_draw(map)
+            }
+        }
+        _ = scroller
+    }
+
+    /// Point the minimap at the active buffer and redraw when it changes.
+    private func syncMinimap(buffer: ViewStorage, storage: ViewStorage) {
+        guard let state = storage.fields[Self.minimapStateKey] as? MinimapState,
+              let map = storage.content[Self.mapKey]?.first
+        else { return }
+        if state.buffer != buffer.opaquePointer {
+            state.buffer = buffer.opaquePointer
+            state.invalidate()
+            gtk_widget_queue_draw(map.opaquePointer?.cast())
+        }
+        // Typing doesn't re-render the view tree, so the map listens to
+        // the buffer directly.
+        buffer.connectSignal(name: "changed", id: "minimap") {
+            state.invalidate()
+            gtk_widget_queue_draw(map.opaquePointer?.cast())
+        }
     }
 
     // MARK: - Buffers

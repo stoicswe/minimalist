@@ -18,6 +18,8 @@ struct MainView: View {
     @State var zenMode = false
     @State var folderName = ""
     @State var branch = ""
+    @State var branches: [String] = []
+    @State var branchMenuVisible = false
 
     // Sidebar
     @State var rows: [FileRow] = []
@@ -80,6 +82,7 @@ struct MainView: View {
     @State var historyPreview = ""
     @State var preferencesVisible = false
     @State var shortcutsVisible = false
+    @State var aboutVisible = false
 
     /// What a name prompt is being used for.
     enum NamePrompt: String {
@@ -166,41 +169,69 @@ struct MainView: View {
         }
         .response("Cancel", role: .close) { }
         .response("Create", appearance: .suggested, role: .default) { createBranch() }
-        .dialog(visible: $revisionsVisible, title: "Revision History", width: 720, height: 520) {
+        // Every dialog needs its own id: the wrappers all share this
+        // view's storage and park their widget under "dialog" + id, so
+        // two dialogs without ids silently overwrite each other — the
+        // second one never presents. `aboutDialog` has no id parameter
+        // and always uses the bare "dialog" key, so it owns that one.
+        .dialog(
+            visible: $revisionsVisible,
+            title: "Revision History",
+            id: "revisions",
+            width: 720,
+            height: 520
+        ) {
             revisionHistory
         }
-        .dialog(visible: $commitsVisible, title: "Commit History", width: 760, height: 560) {
+        .dialog(
+            visible: $commitsVisible,
+            title: "Commit History",
+            id: "commits",
+            width: 760,
+            height: 560
+        ) {
             commitHistory
         }
-        .preferencesDialog(visible: $preferencesVisible)
-        .preferencesPage("Editor", icon: .custom(name: "document-edit-symbolic")) { page in
-            editorPreferences(page)
+        .dialog(
+            visible: $preferencesVisible,
+            title: "Preferences",
+            id: "preferences",
+            width: 620,
+            height: 640
+        ) {
+            preferencesContent
         }
-        .preferencesPage("Appearance", icon: .custom(name: "applications-graphics-symbolic")) { page in
-            appearancePreferences(page)
+        .aboutDialog(
+            visible: $aboutVisible,
+            app: AppInfo.name,
+            developer: AppInfo.developer,
+            version: AppInfo.version,
+            icon: .custom(name: AppInfo.iconName),
+            details: [
+                .comment(AppInfo.blurb),
+                .copyright(AppInfo.copyright),
+                .developers(["\(AppInfo.developer) \(AppInfo.profileURL?.absoluteString ?? "")"]),
+                .licenseType(.mitX11)
+            ],
+            links: [
+                // The macOS tip jar is a StoreKit purchase; on Linux the
+                // equivalent is the project's GitHub Sponsor button.
+                .add(AppInfo.sponsorURL, title: "Sponsor this project"),
+                .website(AppInfo.projectURL),
+                .issues(AppInfo.issuesURL),
+                .add(AppInfo.blueskyURL, title: "Bluesky (\(AppInfo.blueskyHandle))"),
+                .add(AppInfo.emailURL, title: AppInfo.email)
+            ]
+        )
+        .dialog(
+            visible: $shortcutsVisible,
+            title: "Keyboard Shortcuts",
+            id: "shortcuts",
+            width: 520,
+            height: 620
+        ) {
+            shortcutsContent
         }
-        .shortcutsDialog(visible: $shortcutsVisible)
-        .shortcutsSection("Files") { section in
-            section
-                .shortcutsItem("New file", accelerator: "n".ctrl())
-                .shortcutsItem("Open file", accelerator: "o".ctrl())
-                .shortcutsItem("Open folder", accelerator: "o".ctrl().shift())
-                .shortcutsItem("Save", accelerator: "s".ctrl())
-                .shortcutsItem("Save as", accelerator: "s".ctrl().shift())
-        }
-        .shortcutsSection("Tabs & view") { section in
-            section
-                .shortcutsItem("Close tab", accelerator: "w".ctrl())
-                .shortcutsItem("Move tab left", accelerator: "Left".ctrl().alt())
-                .shortcutsItem("Move tab right", accelerator: "Right".ctrl().alt())
-                .shortcutsItem("Toggle sidebar", accelerator: "b".ctrl())
-                .shortcutsItem("Zen mode", accelerator: "z".ctrl().alt())
-                .shortcutsItem("Word wrap", accelerator: "w".ctrl().alt())
-                .shortcutsItem("Search palette", accelerator: "p".ctrl())
-        }
-        // `onAppear` runs while the view's storage is still being built,
-        // where `@State` writes would be discarded — restore on the next
-        // main-loop idle instead, once the first render has landed.
         .onAppear { Idle { restoreSession() } }
     }
 }

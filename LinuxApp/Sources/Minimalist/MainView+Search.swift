@@ -124,9 +124,6 @@ extension MainView {
         }
         .style("palette")
         .frame(maxWidth: 520)
-        .halign(.center)
-        .valign(.start)
-        .padding(60, [.top])
     }
 
     @ViewBuilder func searchRowView(_ result: SearchRow, selected: Bool) -> Body {

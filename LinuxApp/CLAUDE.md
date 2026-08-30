@@ -42,9 +42,13 @@ Requirements (hard, discovered the annoying way):
   the session snapshot, plus the `onMain {}` bridge (see below). Adwaita
   `@State` holds value snapshots (`FileRow`, `EditorTab`).
 - `Sources/Minimalist/Editor/SourceEditor.swift` — the editor widget:
-  GtkSourceView + `GtkSourceMap` written against the C API (the upstream
-  `CodeEditor` widget only does text + line numbers). Keeps one buffer
-  per open document so undo, cursor, and scroll survive tab switches.
+  GtkSourceView written against the C API (the upstream `CodeEditor`
+  widget only does text + line numbers). Keeps one buffer per open
+  document so undo, cursor, and scroll survive tab switches.
+- `Sources/Minimalist/Editor/MinimapArea.swift` — the minimap, drawn with
+  cairo on a `GtkDrawingArea`. Not `GtkSourceMap`: that renders the
+  document at a 1pt font and scrolls, so a long file never fits, while
+  the macOS minimap scales the *whole* file into the strip.
 - `Sources/Minimalist/Support/GTKBridge.swift` — raw GTK the toolkit
   doesn't wrap: typed signal connections, the key controller behind ⇧⇧,
   right-click / double-click gestures, GIO trash, URI launching.
@@ -91,6 +95,27 @@ values you pass in/out `Sendable` snapshots.
   don't split one fact across two `@State`s (the editor binds straight
   through to its `Document` rather than mirroring the text in view
   state, which is why).
+- **Every dialog needs its own `id`.** The dialog modifiers all share
+  the view's `ViewStorage` and park their widget under `"dialog" + id`,
+  so two dialogs without ids overwrite each other and the second never
+  presents. `aboutDialog` takes no id and always uses the bare key, so
+  leave that one to it.
+- **`preferencesDialog` / `shortcutsDialog` are unusable as-is** (as of
+  this checkout): on close they `g_object_unref` pages they don't own
+  *and* never clear their storage slot, so the dialog can't reopen and
+  the freed objects spray GObject criticals. Build those on the plain
+  `dialog(visible:title:id:width:height:)` with `PreferencesPage` /
+  `FormSection` content instead — see `MainView+Preferences.swift`.
+- **`PreferencesGroup` has no public `init()`** — use its `FormSection`
+  alias: `FormSection("Title") { rows }`.
+- **`.overlay { }` twice replaces, it doesn't nest** — the second call
+  lands on the `Overlay` widget's own `overlay` property. Put every
+  floating element in one `.overlay`.
+- **Every overlay child needs its own `halign`/`valign`.** A bare `if` at
+  the top level of an overlay's `ViewBuilder` becomes a `GtkStack` that
+  fills the pane; being invisible doesn't stop it from swallowing the
+  clicks and scroll events meant for the widgets underneath. Wrap
+  conditionals in an always-present aligned container.
 - **`ViewStorage(pointer)` must hold an `OpaquePointer`.** Its
   `opaquePointer` accessor is a conditional cast, so storing a typed
   `UnsafeMutablePointer` silently yields `nil` later — call `.opaque()`

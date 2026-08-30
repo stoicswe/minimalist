@@ -13,12 +13,18 @@ extension MainView {
     var style: String {
         let settings = onMain { DocumentStore.shared.settings }
         return """
-        .branch-pill {
+        button.branch-pill {
             background-color: alpha(@accent_bg_color, 0.15);
+            background-image: none;
             color: @accent_color;
+            border: none;
+            box-shadow: none;
             border-radius: 999px;
-            padding: 0 6px;
-            min-height: 22px;
+            padding: 1px 8px;
+            min-height: 24px;
+        }
+        button.branch-pill:hover {
+            background-color: alpha(@accent_bg_color, 0.28);
         }
         .tab-bar { padding: 4px 6px; }
         box.tab-slot {
@@ -107,7 +113,10 @@ extension MainView {
         .editor-view.editor-bg-white text { background-color: #ffffff; color: #1d1d1d; }
         .editor-view.editor-bg-sepia text { background-color: #f4ecd8; color: #3b352b; }
         .editor-view.editor-bg-dark text { background-color: #1e1e1e; color: #e6e6e6; }
-        .editor-map { border-left: 1px solid alpha(@view_fg_color, 0.08); }
+        .editor-map {
+            border-left: 1px solid alpha(@view_fg_color, 0.08);
+            background-color: alpha(@view_fg_color, 0.02);
+        }
         """
     }
 

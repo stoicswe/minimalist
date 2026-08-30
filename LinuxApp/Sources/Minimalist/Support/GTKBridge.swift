@@ -81,6 +81,100 @@ enum GTKBridge {
         )
     }
 
+    /// Fire `handler` with widget-local coordinates on a primary press.
+    static func onPress(_ widget: OpaquePointer?, handler: @escaping (Double, Double) -> Void) {
+        guard let widget else { return }
+        let gesture = gtk_gesture_click_new()
+        gtk_gesture_single_set_button(gesture, 1)
+        gtk_event_controller_set_propagation_phase(gesture, GTK_PHASE_BUBBLE)
+        gtk_widget_add_controller(widget.cast(), gesture)
+
+        let callback: @convention(c) (
+            UnsafeMutableRawPointer?, Int32, Double, Double, UnsafeMutableRawPointer?
+        ) -> Void = { _, _, x, y, data in
+            guard let data,
+                  let handler = Unmanaged<Box>.fromOpaque(data).takeUnretainedValue()
+                      .handler as? (Double, Double) -> Void
+            else { return }
+            handler(x, y)
+        }
+        connect(
+            object: gesture,
+            signal: "pressed",
+            callback: unsafeBitCast(callback, to: GCallback.self),
+            box: .init(handler)
+        )
+    }
+
+    /// Fire `handler` with widget-local coordinates as a primary drag
+    /// moves — used to scrub the minimap.
+    static func onDrag(_ widget: OpaquePointer?, handler: @escaping (Double, Double) -> Void) {
+        guard let widget else { return }
+        let gesture = gtk_gesture_drag_new()
+        gtk_gesture_single_set_button(gesture, 1)
+        gtk_event_controller_set_propagation_phase(gesture, GTK_PHASE_BUBBLE)
+        gtk_widget_add_controller(widget.cast(), gesture)
+
+        // `drag-update` reports an offset from the press, so the press
+        // position is tracked alongside the handler.
+        let origin = DragOrigin()
+        let beginCallback: @convention(c) (
+            UnsafeMutableRawPointer?, Double, Double, UnsafeMutableRawPointer?
+        ) -> Void = { _, x, y, data in
+            guard let data,
+                  let context = Unmanaged<Box>.fromOpaque(data).takeUnretainedValue()
+                      .handler as? (DragOrigin, (Double, Double) -> Void)
+            else { return }
+            context.0.x = x
+            context.0.y = y
+        }
+        let updateCallback: @convention(c) (
+            UnsafeMutableRawPointer?, Double, Double, UnsafeMutableRawPointer?
+        ) -> Void = { _, offsetX, offsetY, data in
+            guard let data,
+                  let context = Unmanaged<Box>.fromOpaque(data).takeUnretainedValue()
+                      .handler as? (DragOrigin, (Double, Double) -> Void)
+            else { return }
+            context.1(context.0.x + offsetX, context.0.y + offsetY)
+        }
+        connect(
+            object: gesture,
+            signal: "drag-begin",
+            callback: unsafeBitCast(beginCallback, to: GCallback.self),
+            box: .init((origin, handler))
+        )
+        connect(
+            object: gesture,
+            signal: "drag-update",
+            callback: unsafeBitCast(updateCallback, to: GCallback.self),
+            box: .init((origin, handler))
+        )
+    }
+
+    /// Where a drag started, in widget coordinates.
+    private final class DragOrigin {
+        var x: Double = 0
+        var y: Double = 0
+    }
+
+    /// Fire `handler` whenever an adjustment's value changes (the
+    /// minimap redraws its viewport marker on scroll).
+    static func onValueChanged(_ adjustment: OpaquePointer?, handler: @escaping () -> Void) {
+        guard let adjustment else { return }
+        let callback: @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?) -> Void = { _, data in
+            guard let data,
+                  let handler = Unmanaged<Box>.fromOpaque(data).takeUnretainedValue().handler as? () -> Void
+            else { return }
+            handler()
+        }
+        connect(
+            object: adjustment,
+            signal: "value-changed",
+            callback: unsafeBitCast(callback, to: GCallback.self),
+            box: .init(handler)
+        )
+    }
+
     /// Fire `handler` on a double primary click (used to pin preview tabs).
     static func onDoubleClick(_ widget: OpaquePointer?, handler: @escaping () -> Void) {
         guard let widget else { return }

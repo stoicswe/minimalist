@@ -21,12 +21,6 @@ extension MainView {
             activateTab(active)
         }
         restoring = false
-        // `@State` reads stay live through the property wrapper, so this
-        // closure sees the current tabs whenever the window closes.
-        SessionHook.shared.snapshot = { (tabs, activeTabID) }
-        SessionHook.shared.onQuit = { tabs, active in
-            onMain { DocumentStore.shared.endSession(tabs: tabs, activeTabID: active) }
-        }
     }
 
     /// Persist the window state after anything that changes it. Cheap
@@ -48,7 +42,7 @@ extension MainView {
         folderName = url.lastPathComponent
         expanded = [url.path]
         refreshRows()
-        branch = onMain { DocumentStore.shared.branch() }
+        refreshBranches()
         persistSession()
     }
 
@@ -451,12 +445,29 @@ extension MainView {
 
     // MARK: - Git
 
+    /// Re-read the current branch and the local branch list. Kept in
+    /// `@State` rather than queried per render — each call is a libgit2
+    /// repository open.
+    func refreshBranches() {
+        let state = onMain { () -> (String, [String]) in
+            (DocumentStore.shared.branch(), DocumentStore.shared.branches())
+        }
+        branch = state.0
+        branches = state.1
+    }
+
+    func openBranchMenu() {
+        refreshBranches()
+        branchMenuVisible = true
+    }
+
     func checkout(_ name: String) {
+        guard name != branch else { return }
         if let error = onMain({ DocumentStore.shared.checkout(name) }) {
             report(error)
             return
         }
-        branch = onMain { DocumentStore.shared.branch() }
+        refreshBranches()
         onMain { DocumentStore.shared.reloadTree() }
         refreshRows()
     }

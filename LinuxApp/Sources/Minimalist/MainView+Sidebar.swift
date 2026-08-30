@@ -58,39 +58,121 @@ extension MainView {
         refreshRows()
     }
 
-    /// Folder name · branch pill, mirroring the macOS TopBar.
+    /// The macOS TopBar puts the folder name and branch on one line; a
+    /// GNOME sidebar is narrower, so the branch pill sits *under* the
+    /// folder name instead of squeezing it out of view.
     @ViewBuilder var projectHeader: Body {
-        HStack(spacing: 8) {
+        VStack(spacing: 4) {
             Text(folderName.isEmpty ? "{m.txt}" : folderName)
                 .ellipsize()
                 .heading()
+                .halign(.start)
             if !branch.isEmpty {
-                Text("·")
-                    .dimLabel()
                 branchButton
             }
         }
-        .halign(.start)
+        .halign(.fill)
         .padding(12)
     }
 
+    /// The branch pill: current branch, with a popover to check another
+    /// one out or branch off it.
     @ViewBuilder var branchButton: Body {
-        Menu(branch, icon: .custom(name: "media-playlist-shuffle-symbolic")) {
-            MenuSection {
-                ForEach(onMain { DocumentStore.shared.branches() }.map { Choice(id: $0) }) { item in
-                    MenuButton(item.id == branch ? "● \(item.id)" : item.id) { checkout(item.id) }
+        Button("") { openBranchMenu() }
+            .child {
+                HStack(spacing: 6) {
+                    Image()
+                        .iconName("media-playlist-shuffle-symbolic")
+                    Text(branch)
+                        .ellipsize()
+                    Image()
+                        .iconName("pan-down-symbolic")
+                }
+                .halign(.start)
+            }
+            .flat()
+            .style("branch-pill")
+            .halign(.start)
+            .tooltip("Switch branch")
+            .popover(visible: $branchMenuVisible) {
+                branchMenu
+            }
+    }
+
+    @ViewBuilder var branchMenu: Body {
+        VStack(spacing: 2) {
+            Text("Branches")
+                .caption()
+                .dimLabel()
+                .halign(.start)
+                .padding(6, [.leading, .top])
+            ScrollView {
+                VStack(spacing: 2) {
+                    if branches.isEmpty {
+                        Text("No local branches")
+                            .dimLabel()
+                            .padding(8)
+                    } else {
+                        ForEach(branches.map { Choice(id: $0) }) { item in
+                            branchRow(item.id)
+                        }
+                    }
                 }
             }
-            MenuSection {
-                MenuButton("New Branch…") {
-                    newBranchName = ""
-                    newBranchVisible = true
-                }
+            .hscrollbarPolicy(.never)
+            .frame(maxHeight: 260)
+            Separator()
+            contextItemStyled("New Branch…", icon: "list-add-symbolic") {
+                branchMenuVisible = false
+                newBranchName = ""
+                newBranchVisible = true
             }
         }
+        .padding(4)
+        .frame(maxWidth: 300)
+    }
+
+    @ViewBuilder func branchRow(_ name: String) -> Body {
+        Button(name) {
+            branchMenuVisible = false
+            checkout(name)
+        }
+        .child {
+            HStack(spacing: 8) {
+                Image()
+                    .iconName(name == branch ? "object-select-symbolic" : "media-playlist-shuffle-symbolic")
+                    .dimLabel(name != branch)
+                Text(name)
+                    .ellipsize()
+            }
+            .halign(.start)
+        }
         .flat()
-        .style("branch-pill")
-        .tooltip("Current branch")
+        .style("menu-item")
+        .style("row-active", active: name == branch)
+    }
+
+    /// A menu-styled button, shared by the branch popover and the file
+    /// tree's context menu.
+    @ViewBuilder func contextItemStyled(
+        _ label: String,
+        icon: String,
+        destructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> Body {
+        Button(label) { action() }
+            .child {
+                HStack(spacing: 8) {
+                    Image()
+                        .iconName(icon)
+                        .dimLabel()
+                    Text(label)
+                }
+                .halign(.start)
+            }
+            .flat()
+            .destructive(destructive)
+            .style("menu-item")
     }
 
     @ViewBuilder func rowView(_ row: FileRow) -> Body {
@@ -171,22 +253,10 @@ extension MainView {
         destructive: Bool = false,
         action: @escaping () -> Void
     ) -> Body {
-        Button(label) {
+        contextItemStyled(label, icon: icon, destructive: destructive) {
             showContextMenu = false
             action()
         }
-        .child {
-            HStack(spacing: 8) {
-                Image()
-                    .iconName(icon)
-                    .dimLabel()
-                Text(label)
-            }
-            .halign(.start)
-        }
-        .flat()
-        .destructive(destructive)
-        .style("menu-item")
     }
 
     /// A `ForEach`- and `ComboRow`-friendly wrapper for plain strings.

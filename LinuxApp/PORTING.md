@@ -133,6 +133,9 @@ recovery drafts are written on a debounce).
   bookmarks — a sandbox artifact Linux doesn't need; plain paths do).
 - Recents list (12) feeds the search palette.
 - Open File/Folder honor a preference: open in same window vs new window.
+- **About** (a Preferences tab): developer portrait, name/handle, a
+  blurb about the project, Bluesky and email rows, a StoreKit **tip jar**
+  (three consumable tiers that unlock nothing), and the bundle's version.
 - Preferences window: editor font + size, syntax themes (light/dark),
   editor background + pattern, accent color presets with per-element
   tint toggles (tabs, sidebar, …), indentation defaults, completion
@@ -168,15 +171,15 @@ Status: ✅ done · 🟡 partial · ⬜ not started · ❌ intentionally skipped
 
 | Feature | Linux status | Linux implementation |
 |---|---|---|
-| Window shell (header bar, split view) | ✅ | Adwaita `HeaderBar` + `OverlaySplitView` replaces the custom titlebar/TopBar; the folder name + branch pill live at the top of the sidebar |
+| Window shell (header bar, split view) | ✅ | Adwaita `HeaderBar` + `OverlaySplitView` replaces the custom titlebar/TopBar. **Deviation:** macOS puts the folder name, a `·`, and the branch on one line; the narrower GNOME sidebar stacks the branch pill *under* the folder name so neither gets cut off |
 | File tree (expand/collapse, hides `.minimal`) | 🟡 | Flattened `FileRow` list with compacted `parent.child` chains and the macOS monogram chips (`MinimalistCore.FileTypeBadge`). Missing: internal drag-to-move (external file drops do copy in) and live FS watching |
 | Tabs (dirty dot, close button, preview, reorder) | ✅ | Pill tab strip; preview tabs are italic single-slot and pin on edit or double-click; Ctrl+Alt+←/→ reorders; closing a dirty tab raises the Save / Don't Save / Cancel `AlertDialog` |
 | Text editor + highlighting + line numbers | ✅ | `SourceEditor` (GtkSourceView) with one buffer per open document, so undo, cursor, and scroll survive tab switches |
 | Open/save/save-as/new untitled | ✅ | Portal dialogs (`fileImporter`/`folderImporter`/`fileExporter`) |
 | Dirty indicator | ✅ | Per-tab `•` plus the window title |
 | Git branch display | ✅ | Shared `GitService` |
-| Branch popover (checkout / create) | ✅ | Menu off the sidebar's branch pill; create-branch uses an `AlertDialog` + `EntryRow` |
-| Minimap | ✅ | **`GtkSourceMap`** docked at the editor's trailing edge; toggle floats over the editor |
+| Branch popover (checkout / create) | ✅ | Popover off the sidebar's branch pill: the local branches with the current one checked, and "New Branch…" (an `AlertDialog` + `EntryRow`) which branches off the current head |
+| Minimap | ✅ | A cairo-drawn `GtkDrawingArea` (`MinimapArea`) at the editor's trailing edge: one bar per line, the whole file scaled to fit as on macOS, translucent viewport marker, click/drag to scroll. `GtkSourceMap` was tried first and rejected — it renders at a 1pt font and scrolls, so long files never fit |
 | Status pill (language/indent/EOL popover) | ✅ | Bottom-trailing overlay + `Popover` with language / indentation / line-ending pickers and "Use as default" |
 | Completion | ✅ | GtkSourceCompletion: a words provider over the document plus a second one fed from core's `LanguageKeywords`. **Deviation:** GNOME's completion list instead of macOS's inline ghost text |
 | Word wrap toggle | ✅ | GtkSourceView wrap mode, Ctrl+Alt+W and a preference |
@@ -188,6 +191,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started · ❌ intentionally skipped
 | Preview tabs (italic, single-slot) | ✅ | `openFile(_:preview:)` mirrors `Workspace.openPreview` |
 | Session restore (folder + tabs) | 🟡 | Plain paths in `~/.local/state/m-txt/session.json`, saved on every change. Missing: multiple windows (the Linux app is single-window) |
 | Recents | ✅ | Same JSON state file; feeds the palette |
+| About + tip jar | ✅ | GNOME's `AdwAboutDialog` from the primary menu rather than a Preferences tab, carrying the same blurb, developer, contacts, license and version. **Deviation:** StoreKit has no Linux equivalent, so the tip jar becomes a "Sponsor this project" link to the GitHub repo (its Sponsor button comes from `.github/FUNDING.yml`) |
 | Preferences window | ✅ | `PreferencesDialog`: editor font, line numbers/minimap/wrap/current line, indentation + line-ending defaults, completion toggles, syntax themes, editor background |
 | Media viewers (image/video/audio) | ✅ | `Picture` for images, `GtkVideo` (GStreamer) for audio and video, with GTK's own transport controls |
 | PDF viewer | ❌ | Hands the file to the system document viewer rather than shipping poppler |

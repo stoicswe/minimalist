@@ -85,7 +85,11 @@ parts:
       - gstreamer1.0-libav
     override-pull: |
       craftctl default
-      craftctl set version="$(git -C "$CRAFT_PART_SRC" describe --tags --always 2>/dev/null || echo dev)"
+      # Snap versions are capped at 32 characters, so keep the SHA short
+      # and truncate; the leading "v" only adds noise in store listings.
+      version="$(git -C "$CRAFT_PART_SRC" describe --tags --always --abbrev=7 2>/dev/null || echo dev)"
+      version="${version#v}"
+      craftctl set version="${version:0:32}"
     override-build: |
       set -eu
       # swift.org toolchain — Ubuntu's apt swiftlang (6.1) is too old for
@@ -108,6 +112,10 @@ parts:
       swift build --package-path LinuxApp -c release --static-swift-stdlib
       install -Dm755 LinuxApp/.build/release/Minimalist "$CRAFT_PART_INSTALL/usr/bin/m-txt"
       install -Dm755 LinuxApp/snap-assets/minimalist-launch "$CRAFT_PART_INSTALL/usr/bin/minimalist-launch"
+      # Also install the icon under its app id so the About dialog (which
+      # takes an icon *name*, not a path) can find it.
+      install -Dm644 snap/gui/icon.svg \
+          "$CRAFT_PART_INSTALL/usr/share/icons/hicolor/scalable/apps/com.stoicswe.minimalist.svg"
     override-prime: |
       craftctl default
       # Staged schemas ship uncompiled; GTK needs the compiled cache.
