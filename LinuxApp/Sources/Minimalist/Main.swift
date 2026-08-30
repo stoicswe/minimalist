@@ -12,8 +12,16 @@ struct MinimalistLinux: App {
         }
         .title("{m.txt}")
         .defaultSize(width: 1100, height: 720)
-        .closeShortcut()
+        // Ctrl+W closes the *tab* (GNOME convention, see PORTING.md), so
+        // the window uses Ctrl+Shift+W and Ctrl+Q quits.
+        .keyboardShortcut("w".ctrl().shift()) { $0.close() }
         .quitShortcut()
+        .onClose {
+            // Write the session snapshot and the quit-time "session end"
+            // commit before the window goes away.
+            SessionHook.shared.quit()
+            return .close
+        }
     }
 
 }

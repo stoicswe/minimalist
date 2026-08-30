@@ -1,294 +1,237 @@
 import Adwaita
-import CodeEditor
 import Foundation
 import MinimalistCore
 
-/// v1 shell: header bar with file actions, sidebar file tree, tab strip,
-/// GtkSourceView editor. Text documents only — media viewers, revision
-/// history, and zen mode stay macOS-only for now.
+/// The window shell, styled after the macOS app: a sidebar with the
+/// project header and branch pill, a pill tab strip, the GtkSourceView
+/// editor with its minimap, and a floating status pill.
+///
+/// Layout and interaction logic live here; the per-area bodies are split
+/// across `MainView+*.swift`.
 struct MainView: View {
 
     var app: AdwaitaApp
     var window: AdwaitaWindow
 
-    @State private var sidebarVisible = true
-    @State private var folderName = ""
-    @State private var branch = ""
-    @State private var rows: [FileRow] = []
-    @State private var expanded: Set<String> = []
-    @State private var tabs: [EditorTab] = []
-    @State private var activeTabID = ""
-    @State private var editorText = ""
-    @State private var baselineText = ""
-    @State private var untitledCount = 0
-    @State private var openFileSignal = Signal()
-    @State private var openFolderSignal = Signal()
-    @State private var saveAsSignal = Signal()
+    // Shell
+    @State var sidebarVisible = true
+    @State var zenMode = false
+    @State var folderName = ""
+    @State var branch = ""
+    @State var branches: [String] = []
+    @State var branchMenuVisible = false
 
-    private var activeTab: EditorTab? {
+    // Sidebar
+    @State var rows: [FileRow] = []
+    @State var expanded: Set<String> = []
+    @State var contextRowID = ""
+    @State var showContextMenu = false
+
+    // Tabs & editor
+    @State var tabs: [EditorTab] = []
+    @State var activeTabID = ""
+    @State var untitledCount = 0
+    @State var scrollLine: Int?
+    @State var scrollToken = 0
+    /// Bumped whenever a model change needs the chrome to redraw (dirty
+    /// dots, the status pill, settings) — Adwaita re-renders on `@State`
+    /// changes, and the documents themselves aren't view state.
+    @State var chromeTick = 0
+
+    // File dialogs
+    @State var openFileSignal = Signal()
+    @State var openFolderSignal = Signal()
+    @State var saveAsSignal = Signal()
+
+    // Search palette
+    @State var searchVisible = false
+    @State var searchQuery = ""
+    @State var searchIndex = 0
+    @State var searchFocus = Signal()
+    /// Workspace files, collected once when the palette opens so typing
+    /// doesn't re-walk the tree on every keystroke.
+    @State var searchCandidates: [String] = []
+
+    // Dialogs
+    @State var namePromptVisible = false
+    @State var namePromptKind = NamePrompt.newFile
+    @State var namePromptValue = ""
+    @State var namePromptTarget = ""
+    @State var deleteVisible = false
+    @State var unsavedVisible = false
+    @State var pendingCloseID = ""
+    /// Set while a "Save" answer to the unsaved-changes prompt is waiting
+    /// on Save As, so the tab closes once the file has a home.
+    @State var closeAfterSave = false
+    /// True while the session is being restored, so the half-restored
+    /// state isn't written back over the saved one.
+    @State var restoring = false
+    @State var errorVisible = false
+    @State var errorMessage = ""
+    @State var newBranchVisible = false
+    @State var newBranchName = ""
+    @State var statusPopoverVisible = false
+    @State var revisionsVisible = false
+    @State var revisionSelection = ""
+    @State var revisionRows: [RevisionRow] = []
+    @State var commitsVisible = false
+    @State var commitSelection = ""
+    @State var commitRows: [CommitRow] = []
+    /// Path whose history the open history dialog is showing.
+    @State var historyTarget = ""
+    @State var historyPreview = ""
+    @State var preferencesVisible = false
+    @State var shortcutsVisible = false
+    @State var aboutVisible = false
+
+    /// What a name prompt is being used for.
+    enum NamePrompt: String {
+        case newFile, newFolder, rename
+
+        var heading: String {
+            switch self {
+            case .newFile: "New File"
+            case .newFolder: "New Folder"
+            case .rename: "Rename"
+            }
+        }
+    }
+
+    var activeTab: EditorTab? {
         tabs.first { $0.id == activeTabID }
     }
 
-    private var isDirty: Bool {
-        activeTab != nil && editorText != baselineText
+    /// The active document's text. Deliberately *not* `@State`: the
+    /// editor binds through to the `Document`, so the text can never be
+    /// one render out of step with `activeTabID` — which would otherwise
+    /// push one document's contents into another's buffer.
+    var activeText: String {
+        text(of: activeTabID)
     }
 
-    private var windowTitle: String {
-        guard let tab = activeTab else { return "{m.txt}" }
-        return (isDirty ? "• " : "") + tab.title
+    func text(of id: String) -> String {
+        guard !id.isEmpty else { return "" }
+        return onMain { DocumentStore.shared.document(for: id)?.text ?? "" }
     }
 
     var view: Body {
-        OverlaySplitView(visible: $sidebarVisible) {
+        OverlaySplitView(visible: .init { sidebarVisible && !zenMode } set: { sidebarVisible = $0 }) {
             sidebar
         } content: {
-            content
+            contentPane
         }
-        .topToolbar {
-            HeaderBar {
-                Button("Open…") { openFileSignal.signal() }
-                    .keyboardShortcut("o".ctrl())
-                Button("Folder…") { openFolderSignal.signal() }
-                    .keyboardShortcut("o".ctrl().shift())
-                Button("New") { newUntitled() }
-                    .keyboardShortcut("n".ctrl())
-            } end: {
-                branchLabel
-                Button("Save") { saveActive() }
-                    .keyboardShortcut("s".ctrl())
-                    .style("suggested-action")
-                Button("Close Tab") { closeActiveTab() }
-                    .keyboardShortcut("w".ctrl())
-            }
-            .headerBarTitle {
-                WindowTitle(subtitle: folderName, title: windowTitle)
-            }
+        .topToolbar(visible: !zenMode) {
+            headerBar
         }
-        .fileImporter(open: $openFileSignal, onOpen: { url in openFile(url) })
+        .css { style }
+        .inspect { storage, _ in installKeyHandling(storage) }
+        .fileImporter(open: $openFileSignal, onOpen: { url in openFile(url, preview: false) })
         .folderImporter(open: $openFolderSignal, onOpen: { url in openFolder(url) })
         .fileExporter(
             open: $saveAsSignal,
             initialName: activeTab?.title,
             onSave: { url in saveActiveAs(to: url) }
         )
-    }
-
-    // MARK: - Subviews
-
-    @ViewBuilder private var branchLabel: Body {
-        if !branch.isEmpty {
-            Text("⎇ \(branch)")
-                .style("dim-label")
-        }
-    }
-
-    @ViewBuilder private var sidebar: Body {
-        ScrollView {
-            if rows.isEmpty {
-                Text(folderName.isEmpty ? "No folder open" : "Empty folder")
-                    .style("dim-label")
-                    .padding(20)
-            } else {
-                List(rows, id: \.id, selection: nil) { row in
-                    rowView(row)
-                }
-                .sidebarStyle()
+        .alertDialog(
+            visible: $unsavedVisible,
+            heading: "Save changes to “\(title(of: pendingCloseID))”?",
+            body: "Your changes will be lost if you don't save them.",
+            id: "unsaved"
+        )
+        .response("Cancel", role: .close) { pendingCloseID = "" }
+        .response("Don't Save") { discardAndClose() }
+        .response("Save", appearance: .suggested, role: .default) { saveAndClose() }
+        .alertDialog(
+            visible: $deleteVisible,
+            heading: "Move “\(name(of: contextRowID))” to the Trash?",
+            body: FileOps.isDirectory(URL(fileURLWithPath: contextRowID))
+                ? "The folder and all of its contents will be moved to the Trash."
+                : "The file will be moved to the Trash.",
+            id: "delete"
+        )
+        .response("Cancel", role: .close) { }
+        .response("Move to Trash", appearance: .destructive) { deleteContextTarget() }
+        .alertDialog(visible: $errorVisible, heading: "Something went wrong", body: errorMessage, id: "error")
+        .response("OK", role: .close) { }
+        .alertDialog(visible: $namePromptVisible, heading: namePromptKind.heading, id: "name") {
+            Form {
+                EntryRow("Name", text: $namePromptValue)
             }
+            .padding(6)
         }
-        .hscrollbarPolicy(.never)
-    }
-
-    @ViewBuilder private func rowView(_ row: FileRow) -> Body {
-        Button(rowLabel(row)) { rowTapped(row) }
-            .style("flat")
-            .halign(.start)
-            .padding(row.depth * 16, [.leading])
-    }
-
-    private func rowLabel(_ row: FileRow) -> String {
-        guard row.isDirectory else { return row.name }
-        return (row.isExpanded ? "▾ " : "▸ ") + row.name
-    }
-
-    @ViewBuilder private var content: Body {
-        if tabs.isEmpty {
-            StatusPage(
-                "No Open Files",
-                icon: .default(icon: .documentOpen),
-                description: "Open a folder or file to get started"
-            )
-        } else {
-            VStack {
-                ToggleGroup(selection: tabSelection, values: tabs, id: \.id, label: \.title)
-                    .padding(6)
-                ScrollView {
-                    codeEditor
-                }
-                .vexpand()
+        .response("Cancel", role: .close) { }
+        .response("OK", appearance: .suggested, role: .default) { commitNamePrompt() }
+        .alertDialog(visible: $newBranchVisible, heading: "New Branch", id: "branch") {
+            Form {
+                EntryRow("Branch name", text: $newBranchName)
             }
+            .padding(6)
         }
-    }
-
-    private var codeEditor: CodeEditor {
-        var editor = CodeEditor(text: $editorText)
-            .innerPadding()
-            .lineNumbers()
-        if let tab = activeTab,
-           let language = LanguageMap.editorLanguage(for: tab.languageID) {
-            editor = editor.language(language)
+        .response("Cancel", role: .close) { }
+        .response("Create", appearance: .suggested, role: .default) { createBranch() }
+        // Every dialog needs its own id: the wrappers all share this
+        // view's storage and park their widget under "dialog" + id, so
+        // two dialogs without ids silently overwrite each other — the
+        // second one never presents. `aboutDialog` has no id parameter
+        // and always uses the bare "dialog" key, so it owns that one.
+        .dialog(
+            visible: $revisionsVisible,
+            title: "Revision History",
+            id: "revisions",
+            width: 720,
+            height: 520
+        ) {
+            revisionHistory
         }
-        return editor
-    }
-
-    private var tabSelection: Binding<String> {
-        .init {
-            activeTabID
-        } set: { newValue in
-            activateTab(newValue)
+        .dialog(
+            visible: $commitsVisible,
+            title: "Commit History",
+            id: "commits",
+            width: 760,
+            height: 560
+        ) {
+            commitHistory
         }
-    }
-
-    // MARK: - Folder & sidebar actions
-
-    private func openFolder(_ url: URL) {
-        onMain { DocumentStore.shared.loadFolder(url: url) }
-        folderName = url.lastPathComponent
-        expanded = []
-        refreshRows()
-        branch = GitService(workingDirectory: url).currentBranch() ?? ""
-    }
-
-    private func refreshRows() {
-        let expandedPaths = expanded
-        rows = onMain { DocumentStore.shared.visibleRows(expanded: expandedPaths) }
-    }
-
-    private func rowTapped(_ row: FileRow) {
-        if row.isDirectory {
-            if expanded.contains(row.id) {
-                expanded.remove(row.id)
-            } else {
-                expanded.insert(row.id)
-            }
-            refreshRows()
-        } else {
-            openFile(URL(fileURLWithPath: row.id))
+        .dialog(
+            visible: $preferencesVisible,
+            title: "Preferences",
+            id: "preferences",
+            width: 620,
+            height: 640
+        ) {
+            preferencesContent
         }
+        .aboutDialog(
+            visible: $aboutVisible,
+            app: AppInfo.name,
+            developer: AppInfo.developer,
+            version: AppInfo.version,
+            icon: .custom(name: AppInfo.iconName),
+            details: [
+                .comment(AppInfo.blurb),
+                .copyright(AppInfo.copyright),
+                .developers(["\(AppInfo.developer) \(AppInfo.profileURL?.absoluteString ?? "")"]),
+                .licenseType(.mitX11)
+            ],
+            links: [
+                // The macOS tip jar is a StoreKit purchase; on Linux the
+                // equivalent is the project's GitHub Sponsor button.
+                .add(AppInfo.sponsorURL, title: "Sponsor this project"),
+                .website(AppInfo.projectURL),
+                .issues(AppInfo.issuesURL),
+                .add(AppInfo.blueskyURL, title: "Bluesky (\(AppInfo.blueskyHandle))"),
+                .add(AppInfo.emailURL, title: AppInfo.email)
+            ]
+        )
+        .dialog(
+            visible: $shortcutsVisible,
+            title: "Keyboard Shortcuts",
+            id: "shortcuts",
+            width: 520,
+            height: 620
+        ) {
+            shortcutsContent
+        }
+        .onAppear { Idle { restoreSession() } }
     }
-
-    // MARK: - Tabs & documents
-
-    private func openFile(_ url: URL) {
-        let path = url.path
-        if tabs.contains(where: { $0.id == path }) {
-            activateTab(path)
-            return
-        }
-        let opened = onMain { () -> (languageID: String, isText: Bool)? in
-            guard let doc = DocumentStore.shared.openDocument(at: url) else { return nil }
-            return (doc.language, doc.kind == .text)
-        }
-        // v1 edits text documents only; other kinds have no viewer yet.
-        guard let opened, opened.isText else { return }
-        tabs.append(EditorTab(id: path, title: url.lastPathComponent, languageID: opened.languageID))
-        activateTab(path)
-    }
-
-    private func newUntitled() {
-        untitledCount += 1
-        let name = untitledCount == 1 ? "Untitled" : "Untitled \(untitledCount)"
-        let (path, languageID) = onMain { () -> (String, String) in
-            let doc = DocumentStore.shared.newUntitled(named: name)
-            return (doc.url.path, doc.language)
-        }
-        tabs.append(EditorTab(id: path, title: name, languageID: languageID))
-        activateTab(path)
-    }
-
-    private func activateTab(_ id: String) {
-        guard id != activeTabID, tabs.contains(where: { $0.id == id }) else { return }
-        stashActive()
-        activeTabID = id
-        loadActive()
-    }
-
-    /// Push the editor buffer back into the active tab's Document so
-    /// switching tabs never loses text.
-    private func stashActive() {
-        guard let tab = activeTab else { return }
-        let text = editorText
-        onMain { DocumentStore.shared.document(for: tab.id)?.text = text }
-    }
-
-    private func loadActive() {
-        guard let tab = activeTab else {
-            editorText = ""
-            baselineText = ""
-            return
-        }
-        let (text, baseline) = onMain { () -> (String, String) in
-            let doc = DocumentStore.shared.document(for: tab.id)
-            return (doc?.text ?? "", DocumentStore.shared.baseline(for: tab.id))
-        }
-        editorText = text
-        baselineText = baseline
-    }
-
-    private func saveActive() {
-        guard let tab = activeTab else { return }
-        let untitled = onMain { DocumentStore.shared.document(for: tab.id)?.isUntitled ?? false }
-        if untitled {
-            saveAsSignal.signal()
-            return
-        }
-        let text = editorText
-        if onMain({ DocumentStore.shared.save(path: tab.id, text: text) }) {
-            baselineText = text
-        }
-    }
-
-    private func saveActiveAs(to url: URL) {
-        guard let tab = activeTab else { return }
-        let text = editorText
-        let languageID = onMain { () -> String? in
-            guard let doc = DocumentStore.shared.document(for: tab.id) else { return nil }
-            doc.text = text
-            do {
-                try doc.relocate(to: url)
-            } catch {
-                return nil
-            }
-            DocumentStore.shared.rekey(from: tab.id, to: url.path, baseline: text)
-            return doc.language
-        }
-        guard let languageID else { return }
-        if let index = tabs.firstIndex(where: { $0.id == tab.id }) {
-            tabs[index] = EditorTab(
-                id: url.path,
-                title: url.lastPathComponent,
-                languageID: languageID
-            )
-        }
-        activeTabID = url.path
-        baselineText = text
-        // The saved file may now appear in the open folder's tree.
-        onMain { DocumentStore.shared.reloadTree() }
-        refreshRows()
-    }
-
-    private func closeActiveTab() {
-        guard let tab = activeTab,
-              let index = tabs.firstIndex(where: { $0.id == tab.id })
-        else { return }
-        onMain { DocumentStore.shared.close(path: tab.id) }
-        tabs.remove(at: index)
-        activeTabID = ""
-        if let next = tabs.indices.contains(index) ? tabs[index] : tabs.last {
-            activateTab(next.id)
-        } else {
-            editorText = ""
-            baselineText = ""
-        }
-    }
-
 }

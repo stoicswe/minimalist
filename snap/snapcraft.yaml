@@ -3,6 +3,11 @@
 # Base is core26 (Ubuntu 26.04 LTS) because the UI toolkit needs
 # libadwaita >= 1.7 — core24's 1.5 is too old.
 #
+# Known confinement gap: "Delete…" uses GIO's trash, which needs
+# ~/.local/share/Trash — the `home` interface doesn't reach hidden
+# directories, so inside the snap the app reports that it couldn't
+# trash the file. The gnome extension (below) fixes this too.
+#
 # TODO: switch to `extensions: [gnome]` once the gnome extension
 # supports core26 (https://github.com/canonical/snapcraft/issues/6185).
 # That replaces the hand-staged GTK stack, the launcher script's env
@@ -40,6 +45,7 @@ apps:
       - x11
       - opengl
       - gsettings
+      - audio-playback
       - home
       - removable-media
       - network
@@ -72,9 +78,18 @@ parts:
       - shared-mime-info
       - libgdk-pixbuf2.0-bin
       - libssl3t64
+      # GTK's video/audio widget plays through GStreamer.
+      - gstreamer1.0-gl
+      - gstreamer1.0-plugins-base
+      - gstreamer1.0-plugins-good
+      - gstreamer1.0-libav
     override-pull: |
       craftctl default
-      craftctl set version="$(git -C "$CRAFT_PART_SRC" describe --tags --always 2>/dev/null || echo dev)"
+      # Snap versions are capped at 32 characters, so keep the SHA short
+      # and truncate; the leading "v" only adds noise in store listings.
+      version="$(git -C "$CRAFT_PART_SRC" describe --tags --always --abbrev=7 2>/dev/null || echo dev)"
+      version="${version#v}"
+      craftctl set version="${version:0:32}"
     override-build: |
       set -eu
       # swift.org toolchain — Ubuntu's apt swiftlang (6.1) is too old for
@@ -97,6 +112,10 @@ parts:
       swift build --package-path LinuxApp -c release --static-swift-stdlib
       install -Dm755 LinuxApp/.build/release/Minimalist "$CRAFT_PART_INSTALL/usr/bin/m-txt"
       install -Dm755 LinuxApp/snap-assets/minimalist-launch "$CRAFT_PART_INSTALL/usr/bin/minimalist-launch"
+      # Also install the icon under its app id so the About dialog (which
+      # takes an icon *name*, not a path) can find it.
+      install -Dm644 snap/gui/icon.svg \
+          "$CRAFT_PART_INSTALL/usr/share/icons/hicolor/scalable/apps/com.stoicswe.minimalist.svg"
     override-prime: |
       craftctl default
       # Staged schemas ship uncompiled; GTK needs the compiled cache.

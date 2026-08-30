@@ -2,20 +2,43 @@
 
 GTK4/libadwaita front end for the Minimalist text editor, sharing the
 [`MinimalistCore`](../MinimalistCore) model layer with the macOS app.
-Built with [Adwaita for Swift](https://git.aparoksha.dev/aparoksha/adwaita-swift)
-and [CodeEditor](https://git.aparoksha.dev/aparoksha/codeeditor)
-(GtkSourceView).
+Built with [Adwaita for Swift](https://git.aparoksha.dev/aparoksha/adwaita-swift),
+with the editor written directly against GtkSourceView (via the
+[CodeEditor](https://git.aparoksha.dev/aparoksha/codeeditor) package's
+system-library target).
 
-## v1 scope
+## What it does
 
-- File-tree sidebar (expand/collapse, hides `.minimal/`)
-- Tabs, editor with syntax highlighting + line numbers (GtkSourceView)
-- Open file / open folder / new untitled / save / save-as (Ctrl+O /
-  Ctrl+Shift+O / Ctrl+N / Ctrl+S), close tab (Ctrl+W)
-- Git branch display for the open folder (libgit2, shared `GitService`)
+The Linux app tracks the macOS one feature-for-feature, in GNOME idioms
+(see [PORTING.md](PORTING.md) for the full parity matrix):
 
-Not yet ported: media viewers, markdown/asciidoc readers, revision
-history, zen mode, minimap, preferences, unsaved-changes prompts.
+- File-tree sidebar: compacted `parent.child` chains, the same colored
+  file-type monograms as macOS, right-click menu (new file/folder,
+  rename, duplicate, copy path, delete to trash, revision & commit
+  history), and drag-and-drop import
+- Tabs with dirty dots, close buttons, italic single-slot preview tabs,
+  reorder (Ctrl+Alt+←/→), and an unsaved-changes prompt on close
+- GtkSourceView editor: syntax highlighting, line numbers, a **minimap**
+  that scales the whole file (click or drag it to scroll), word wrap,
+  per-file indentation and line endings,
+  light/dark syntax themes, editor backgrounds, and completion from the
+  document plus the language's keywords
+- Status pill (language · indentation · line endings) with a popover to
+  change any of them, or set them as the default
+- Double-shift (or Ctrl+P) search palette: fuzzy file search, `:line`
+  jumps, in-file matches, recents
+- Git: branch pill with checkout / create-branch, per-file commit
+  history with patches, and the app's own `.minimal/` revision history
+  (autosaves + save/quit commits) with preview and revert
+- Markdown reader view, image / audio / video viewers, hex viewer
+- Zen mode (Ctrl+Alt+Z), preferences, and session restore (folder, tabs,
+  active tab, recents) under `~/.local/state/m-txt/`
+- An About dialog (primary menu) with the project blurb, contacts,
+  license, and a Sponsor link in place of the macOS tip jar
+
+Not yet ported: AsciiDoc reader, multi-window, internal drag-to-move in
+the tree, and the macOS-only extras (glass mode, animated editor
+backgrounds, iCloud sync). PDFs open in the system document viewer.
 
 ## Requirements
 
@@ -34,6 +57,42 @@ cd LinuxApp
 swift build
 swift run Minimalist
 ```
+
+## Publishing to the Snap Store
+
+CI builds the snap for amd64 and arm64 on every push to `main` and
+`release/*` (`.github/workflows/linux.yml`), and publishes it once the
+store credentials are in place:
+
+| Branch | Channel |
+|---|---|
+| `main` | `beta` |
+| `release/*` | `stable` |
+
+Both builds also upload the `.snap` as a workflow artifact, so the
+pipeline keeps working unchanged on forks and before the store is set up
+— the publish step is skipped whenever the credentials secret is absent.
+
+One-time setup, from a machine with `snapcraft` installed:
+
+```sh
+# The name must match `name:` in snap/snapcraft.yaml and the name you
+# registered at https://snapcraft.io/account/register-snap
+snapcraft login
+snapcraft export-login --snaps m-txt \
+  --acls package_access,package_push,package_update,package_release \
+  --expires 2027-01-01 \
+  -
+```
+
+Copy the whole block it prints into a repository secret named
+`SNAPCRAFT_STORE_CREDENTIALS` (Settings → Secrets and variables →
+Actions). The credentials expire on the date given; when the publish
+step starts failing to authenticate, re-export and update the secret.
+
+The snap's version comes from `git describe --tags --always`, so tag
+release commits (`git tag v1.0.1`) to get a readable version in the
+store listing rather than a bare commit SHA.
 
 ## Container build check (no Linux machine needed)
 

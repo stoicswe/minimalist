@@ -36,6 +36,14 @@ A minimalist text editor for macOS. SwiftUI on top and native AppKit running in 
 - Xcode 16+ to build from source
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) to regenerate the project
 
+## Linux
+
+There's a native GTK4/libadwaita build that shares the same document
+engine, with near-identical features — file tree, tabs, minimap, git
+branch and history, revision history, search palette, zen mode. See
+[LinuxApp/](LinuxApp/) to build and run it; CI also builds a `m-txt`
+snap (Ubuntu 25.04+ / libadwaita 1.7+) as a workflow artifact.
+
 ## Install
 
 Grab the latest signed and notarized `.app` from the [Releases](https://github.com/stoicswe/minimalist/releases) page, unzip it, and drag it into `/Applications`.

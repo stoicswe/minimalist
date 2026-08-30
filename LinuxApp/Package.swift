@@ -1,8 +1,10 @@
 // swift-tools-version: 6.0
 
-// Linux front end for {m.txt} — Adwaita for Swift (GTK4/libadwaita) +
-// CodeEditor (GtkSourceView) on top of the shared MinimalistCore model
-// layer. Built and run on Linux; macOS keeps its own SwiftUI app.
+// Linux front end for {m.txt} — Adwaita for Swift (GTK4/libadwaita) on
+// top of the shared MinimalistCore model layer, with the editor built
+// straight against GtkSourceView (the `CCodeEditor` system-library
+// target of the CodeEditor package). Built and run on Linux; macOS
+// keeps its own SwiftUI app.
 //
 // CodeEditor pins adwaita-swift at `branch: "main"`, and SPM forbids a
 // versioned dependency graph from containing branch dependencies — so
@@ -25,7 +27,13 @@ let package = Package(
             dependencies: [
                 .product(name: "MinimalistCore", package: "MinimalistCore"),
                 .product(name: "Adwaita", package: "adwaita-swift"),
-                .product(name: "CodeEditor", package: "codeeditor"),
+                // Raw GTK4/libadwaita and GtkSourceView headers. The
+                // Swift wrappers cover the common widgets; the editor
+                // (GtkSourceView + GtkSourceMap), the key controllers
+                // behind ⇧⇧ / right-click, and GIO's trash need the C
+                // API directly.
+                .product(name: "CAdw", package: "adwaita-swift"),
+                .product(name: "CCodeEditor", package: "codeeditor"),
             ],
             swiftSettings: [
                 // Adwaita for Swift predates strict concurrency: its View

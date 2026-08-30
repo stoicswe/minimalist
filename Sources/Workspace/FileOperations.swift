@@ -1,15 +1,20 @@
 import Foundation
 import AppKit
+import MinimalistCore
 
 /// File-system operations triggered from the sidebar context menu.
-/// All operations show an `NSAlert` if they fail, since the user invoked
-/// them explicitly and a silent failure would be confusing.
+///
+/// The file-system work itself lives in `MinimalistCore.FileOps` (shared
+/// with the Linux app); this layer owns the macOS-specific parts — the
+/// name prompts, the confirmation and error alerts, the pasteboard, the
+/// Finder, and the Trash. All operations show an `NSAlert` if they fail,
+/// since the user invoked them explicitly and a silent failure would be
+/// confusing.
 enum FileOperations {
     // MARK: - Create
 
-    /// Create an empty file in `parent`. Prompts for a name. If the file
-    /// already exists, prompts again. Returns the new file's URL on
-    /// success, nil if cancelled.
+    /// Create an empty file in `parent`. Prompts for a name. Returns the
+    /// new file's URL on success, nil if cancelled or on error.
     @discardableResult
     static func createFile(in parent: URL) -> URL? {
         guard let name = promptForName(
@@ -17,18 +22,7 @@ enum FileOperations {
             message: "Name the new file:",
             defaultValue: "untitled.txt"
         ) else { return nil }
-        let target = parent.appendingPathComponent(name)
-        if FileManager.default.fileExists(atPath: target.path) {
-            showAlert(message: "A file or folder named “\(name)” already exists.")
-            return nil
-        }
-        do {
-            try "".write(to: target, atomically: true, encoding: .utf8)
-            return target
-        } catch {
-            showAlert(message: "Couldn't create file: \(error.localizedDescription)")
-            return nil
-        }
+        return attempt { try FileOps.createFile(named: name, in: parent) }
     }
 
     @discardableResult
@@ -38,18 +32,7 @@ enum FileOperations {
             message: "Name the new folder:",
             defaultValue: "untitled folder"
         ) else { return nil }
-        let target = parent.appendingPathComponent(name)
-        if FileManager.default.fileExists(atPath: target.path) {
-            showAlert(message: "A file or folder named “\(name)” already exists.")
-            return nil
-        }
-        do {
-            try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
-            return target
-        } catch {
-            showAlert(message: "Couldn't create folder: \(error.localizedDescription)")
-            return nil
-        }
+        return attempt { try FileOps.createFolder(named: name, in: parent) }
     }
 
     // MARK: - Rename / duplicate
@@ -61,46 +44,16 @@ enum FileOperations {
             message: "New name:",
             defaultValue: url.lastPathComponent
         ) else { return nil }
-        let target = url.deletingLastPathComponent().appendingPathComponent(newName)
-        guard target != url else { return nil }
-        if FileManager.default.fileExists(atPath: target.path) {
-            showAlert(message: "“\(newName)” already exists.")
-            return nil
-        }
-        do {
-            try FileManager.default.moveItem(at: url, to: target)
-            return target
-        } catch {
-            showAlert(message: "Couldn't rename: \(error.localizedDescription)")
-            return nil
-        }
+        guard let renamed = attempt({ try FileOps.rename(url, to: newName) }) else { return nil }
+        // Unchanged name — nothing for the caller to update.
+        return renamed == url ? nil : renamed
     }
 
     /// Duplicate a file or folder, appending " copy" (or " copy 2", etc.)
     /// before the extension to avoid collisions.
     @discardableResult
     static func duplicate(_ url: URL) -> URL? {
-        let ext = url.pathExtension
-        let base = url.deletingPathExtension().lastPathComponent
-        let parent = url.deletingLastPathComponent()
-        var attempt = 0
-        var target: URL
-        repeat {
-            attempt += 1
-            let suffix = attempt == 1 ? " copy" : " copy \(attempt)"
-            let candidateName = base + suffix
-            target = parent.appendingPathComponent(candidateName)
-            if !ext.isEmpty {
-                target.appendPathExtension(ext)
-            }
-        } while FileManager.default.fileExists(atPath: target.path) && attempt < 100
-        do {
-            try FileManager.default.copyItem(at: url, to: target)
-            return target
-        } catch {
-            showAlert(message: "Couldn't duplicate: \(error.localizedDescription)")
-            return nil
-        }
+        attempt { try FileOps.duplicate(url) }
     }
 
     // MARK: - Copy / paste
@@ -119,25 +72,12 @@ enum FileOperations {
         let pb = NSPasteboard.general
         guard let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]
         else { return [] }
-        var created: [URL] = []
-        for src in urls {
-            var target = parent.appendingPathComponent(src.lastPathComponent)
-            // Avoid collision by appending " copy" if needed.
-            if FileManager.default.fileExists(atPath: target.path) {
-                let ext = target.pathExtension
-                let base = target.deletingPathExtension().lastPathComponent
-                target = parent
-                    .appendingPathComponent(base + " copy")
-                if !ext.isEmpty { target.appendPathExtension(ext) }
-            }
-            do {
-                try FileManager.default.copyItem(at: src, to: target)
-                created.append(target)
-            } catch {
-                showAlert(message: "Couldn't paste \(src.lastPathComponent): \(error.localizedDescription)")
-            }
+        return urls.compactMap { src in
+            attempt(
+                { try FileOps.copy(src, into: parent) },
+                prefix: "Couldn't paste \(src.lastPathComponent): "
+            )
         }
-        return created
     }
 
     /// Whether the pasteboard currently holds at least one file URL we
@@ -162,66 +102,24 @@ enum FileOperations {
     /// URL on success, nil on failure.
     @discardableResult
     static func copy(_ source: URL, into destinationFolder: URL) -> URL? {
-        let target = uniqueDestination(
-            for: source.lastPathComponent,
-            in: destinationFolder
-        )
-        do {
-            try FileManager.default.copyItem(at: source, to: target)
-            return target
-        } catch {
-            showAlert(message: "Couldn't copy: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
-    /// Find a destination URL inside `folder` that doesn't collide with
-    /// an existing entry. Splits the file's basename + extension and
-    /// appends " copy" / " copy N" before the extension as needed.
-    private static func uniqueDestination(for filename: String, in folder: URL) -> URL {
-        let initial = folder.appendingPathComponent(filename)
-        if !FileManager.default.fileExists(atPath: initial.path) { return initial }
-
-        let nsName = filename as NSString
-        let ext = nsName.pathExtension
-        let base = nsName.deletingPathExtension
-        var attempt = 0
-        while attempt < 1000 {
-            attempt += 1
-            let suffix = attempt == 1 ? " copy" : " copy \(attempt)"
-            var candidate = folder.appendingPathComponent(base + suffix)
-            if !ext.isEmpty { candidate.appendPathExtension(ext) }
-            if !FileManager.default.fileExists(atPath: candidate.path) { return candidate }
-        }
-        return initial
+        attempt { try FileOps.copy(source, into: destinationFolder) }
     }
 
     // MARK: - Move
 
     /// Move `source` into `destinationFolder`. No-op (returns the source
-    /// URL) if it's already there, or if the source is the destination
-    /// folder itself / an ancestor of it. On collision shows an alert and
-    /// returns nil.
+    /// URL) if it's already there. Returns nil — silently for a drop onto
+    /// itself, with an alert on collision — when the move can't happen.
     @discardableResult
     static func move(_ source: URL, into destinationFolder: URL) -> URL? {
-        let std = source.standardizedFileURL
-        let destStd = destinationFolder.standardizedFileURL
-        // Already inside destinationFolder — nothing to do.
-        if std.deletingLastPathComponent() == destStd { return source }
-        // Can't drop a folder into itself or any of its descendants.
-        if destStd.path == std.path { return nil }
-        if destStd.path.hasPrefix(std.path + "/") { return nil }
-
-        let target = destStd.appendingPathComponent(source.lastPathComponent)
-        if FileManager.default.fileExists(atPath: target.path) {
-            showAlert(message: "“\(source.lastPathComponent)” already exists in \(destinationFolder.lastPathComponent).")
-            return nil
-        }
         do {
-            try FileManager.default.moveItem(at: source, to: target)
-            return target
+            return try FileOps.move(source, into: destinationFolder)
+        } catch FileOps.OpError.notPermitted {
+            // Dropping a folder onto itself or a descendant: not an error
+            // worth an alert, the drag just doesn't do anything.
+            return nil
         } catch {
-            showAlert(message: "Couldn't move: \(error.localizedDescription)")
+            showAlert(message: error.localizedDescription)
             return nil
         }
     }
@@ -246,7 +144,7 @@ enum FileOperations {
     static func confirmDelete(_ url: URL) -> Bool {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        let isFolder = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+        let isFolder = FileOps.isDirectory(url)
         alert.messageText = "Move “\(url.lastPathComponent)” to the Trash?"
         alert.informativeText = isFolder
             ? "The folder and all of its contents will be moved to the Trash."
@@ -262,6 +160,16 @@ enum FileOperations {
     }
 
     // MARK: - Helpers
+
+    /// Run a `FileOps` call, surfacing any failure as an alert.
+    private static func attempt(_ operation: () throws -> URL, prefix: String = "") -> URL? {
+        do {
+            return try operation()
+        } catch {
+            showAlert(message: prefix + error.localizedDescription)
+            return nil
+        }
+    }
 
     private static func promptForName(
         title: String,
