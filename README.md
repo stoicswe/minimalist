@@ -9,7 +9,7 @@ The text editor for the rest of us. No AI, no excess, no plugins or agents.
   <img alt="Minimalist editor" src="docs/screenshots/light_mode.png">
 </picture>
 
-<a href="https://apps.apple.com/us/app/m-txt-minimal-text-editor/id6764609511?mt=12&itscg=30200&itsct=apps_box_badge&mttnsubad=6764609511" style="display: inline-block;"> <img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us?releaseDate=1787875200" alt="Download on the App Store" style="width: 244px; height: 82px; vertical-align: middle; object-fit: contain;" /></a> <iframe src="https://snapcraft.io/m-txt/embedded?button=black" frameborder="0" width="100%" height="410px" style="border: 1px solid #CCC; border-radius: 2px;"></iframe>
+<a href="https://apps.apple.com/us/app/m-txt-minimal-text-editor/id6764609511?mt=12&itscg=30200&itsct=apps_box_badge&mttnsubad=6764609511" style="display: inline-block;"> <img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us?releaseDate=1787875200" alt="Download on the App Store" style="width: 244px; height: 82px; vertical-align: middle; object-fit: contain;" /></a>
     
 
 A minimalist text editor for macOS. SwiftUI on top and native AppKit running in the background for a simple user interface.
